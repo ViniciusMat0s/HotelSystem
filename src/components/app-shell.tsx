@@ -98,9 +98,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button className="btn btn-outline">
               Sincronizar canais
             </button>
-            <button className="btn btn-primary">
+            <Link href="/reservations/new" className="btn btn-primary">
               Nova reserva
-            </button>
+            </Link>
           </div>
         </header>
         <nav className="flex gap-2 overflow-x-auto border-b border-border bg-surface/70 px-6 py-3 text-xs lg:hidden">

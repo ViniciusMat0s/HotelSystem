@@ -24,9 +24,6 @@
     0 22px 40px rgba(0, 0, 0, 0.4);
 }
 
-html {
-  color-scheme: dark;
-}
 
 @theme inline {
   --color-background: var(--background);
