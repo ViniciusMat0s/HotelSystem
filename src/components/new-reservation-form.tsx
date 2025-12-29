@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useFormState } from "react-dom";
 import {
   createReservationAction,
   type ReservationCreateState,
 } from "@/actions/reservation";
+import { ActionModal } from "@/components/action-modal";
 
 type RoomOption = {
   id: string;
@@ -76,12 +76,19 @@ export function NewReservationForm({
   rooms: RoomOption[];
   guests: GuestOption[];
 }) {
-  const [state, formAction] = useFormState(createReservationAction, initialState);
+  const [state, formAction] = useActionState(createReservationAction, initialState);
   const [guestMode, setGuestMode] = useState<"existing" | "new">(
     guests.length ? "existing" : "new"
   );
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [roomCategory, setRoomCategory] = useState("STANDARD");
+  const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (state.status !== "idle") {
+      setModalOpen(true);
+    }
+  }, [state]);
 
   const guestOptions = useMemo(
     () =>
@@ -97,8 +104,17 @@ export function NewReservationForm({
     return match?.category ?? roomCategory;
   }, [rooms, roomCategory, selectedRoomId]);
 
+  const modalTitle =
+    state.status === "error" ? "Reserva nao concluida" : "Reserva criada";
+  const modalTone = state.status === "error" ? "error" : "success";
+  const modalDetails =
+    state.status === "ok" && state.reservationId
+      ? `Codigo: ${state.reservationId}`
+      : undefined;
+
   return (
-    <form action={formAction} className="space-y-8 text-sm">
+    <>
+      <form action={formAction} className="space-y-8 text-sm">
       <input type="hidden" name="guestMode" value={guestMode} />
 
       <section className="space-y-4">
@@ -348,17 +364,16 @@ export function NewReservationForm({
         </Link>
       </div>
 
-      {state.status === "error" ? (
-        <p className="text-xs text-primary">{state.message}</p>
-      ) : null}
-      {state.status === "ok" ? (
-        <div className="card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3 text-xs text-secondary">
-          <p>{state.message}</p>
-          {state.reservationId ? (
-            <p className="text-muted">Codigo: {state.reservationId}</p>
-          ) : null}
-        </div>
-      ) : null}
-    </form>
+      </form>
+      <ActionModal
+        open={modalOpen && state.status !== "idle"}
+        tone={modalTone}
+        title={modalTitle}
+        description={state.message}
+        details={modalDetails}
+        onClose={() => setModalOpen(false)}
+        actionLabel="Ok, entendi"
+      />
+    </>
   );
 }
