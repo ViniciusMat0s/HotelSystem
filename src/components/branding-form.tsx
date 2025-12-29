@@ -4,11 +4,10 @@ import { useState } from "react";
 import { useBrandingStore, type BrandingColors } from "@/stores/branding-store";
 
 const COLOR_LABELS: { key: keyof BrandingColors; label: string }[] = [
+  { key: "background", label: "Fundo" },
   { key: "primary", label: "Primaria" },
   { key: "secondary", label: "Secundaria" },
   { key: "accent", label: "Destaque" },
-  { key: "background", label: "Fundo" },
-  { key: "surface", label: "Superficie" },
 ];
 
 export function BrandingForm() {
@@ -32,7 +31,7 @@ export function BrandingForm() {
           <input
             value={brandName}
             onChange={(event) => setBrandName(event.target.value)}
-            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3"
+            className="input-field"
           />
         </label>
         <label className="space-y-2 text-sm">
@@ -43,7 +42,7 @@ export function BrandingForm() {
             value={localLogo}
             onChange={(event) => setLocalLogo(event.target.value)}
             onBlur={() => setLogoUrl(localLogo)}
-            className="w-full rounded-2xl border border-border bg-surface-strong px-4 py-3"
+            className="input-field"
           />
         </label>
       </div>
@@ -54,17 +53,17 @@ export function BrandingForm() {
             <span className="text-xs uppercase tracking-[0.2em] text-muted">
               {item.label}
             </span>
-            <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface-strong px-4 py-3">
+            <div className="flex items-center gap-3 card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3">
               <input
                 type="color"
                 value={colors[item.key]}
                 onChange={(event) => setColor(item.key, event.target.value)}
-                className="h-10 w-10 rounded-full border border-border"
+                className="color-swatch"
               />
               <input
                 value={colors[item.key]}
                 onChange={(event) => setColor(item.key, event.target.value)}
-                className="w-full bg-transparent text-sm"
+                className="w-full bg-transparent text-sm focus:outline-none"
               />
             </div>
           </label>
@@ -75,7 +74,7 @@ export function BrandingForm() {
         <button
           type="button"
           onClick={reset}
-          className="rounded-full border border-border px-4 py-2 text-xs"
+          className="btn btn-outline btn-sm"
         >
           Restaurar padrao
         </button>
@@ -86,3 +85,4 @@ export function BrandingForm() {
     </div>
   );
 }
+

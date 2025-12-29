@@ -33,7 +33,7 @@ export default async function FeedbackPage() {
             {requests.map((request) => (
               <div
                 key={request.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-2 card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
               >
                 <span>{request.guestName ?? "Hospede"}</span>
                 <span className="text-xs text-muted">
@@ -47,3 +47,4 @@ export default async function FeedbackPage() {
     </div>
   );
 }
+

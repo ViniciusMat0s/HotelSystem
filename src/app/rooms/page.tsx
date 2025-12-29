@@ -73,7 +73,7 @@ export default async function RoomsPage() {
               {rooms.map((room) => (
                 <div
                   key={room.id}
-                  className="rounded-2xl border border-border bg-surface-strong p-4 text-sm"
+                  className="card-lite rounded-2xl border border-border bg-surface-strong p-4 text-sm"
                 >
                   <div className="flex items-center justify-between">
                     <p className="font-display text-lg">Quarto {room.number}</p>
@@ -105,7 +105,7 @@ export default async function RoomsPage() {
               {maintenance.recurring.map((item) => (
                 <div
                   key={`${item.roomId}-${item.category}`}
-                  className="flex items-center justify-between rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                  className="flex items-center justify-between card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
                 >
                   <span>Quarto {item.roomId.slice(0, 4)}</span>
                   <span className="text-muted">
@@ -131,7 +131,7 @@ export default async function RoomsPage() {
             {usageLogs.map((log) => (
               <div
                 key={log.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-2 card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
               >
                 <span>
                   Quarto {log.room.number} -{" "}
@@ -148,3 +148,4 @@ export default async function RoomsPage() {
     </div>
   );
 }
+

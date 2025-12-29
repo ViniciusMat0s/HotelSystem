@@ -57,7 +57,7 @@ export default async function ReservationsPage() {
             {confirmations.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                className="flex items-center justify-between card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
               >
                 <span>{item.toAddress || "Hospede"}</span>
                 <span className="text-xs text-muted">{item.status}</span>
@@ -69,3 +69,4 @@ export default async function ReservationsPage() {
     </div>
   );
 }
+

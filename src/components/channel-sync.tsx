@@ -25,7 +25,7 @@ export function ChannelSyncActions({ channels }: { channels: ChannelStatus[] }) 
       {channels.map((channel) => (
         <div
           key={channel.channel}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-surface-strong px-4 py-3"
+          className="flex flex-wrap items-center justify-between gap-2 card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
         >
           <div>
             <p className="font-display text-base">{channel.channel}</p>
@@ -42,7 +42,7 @@ export function ChannelSyncActions({ channels }: { channels: ChannelStatus[] }) 
           <button
             type="button"
             onClick={() => handleSync(channel.channel)}
-            className="rounded-full border border-border px-4 py-2 text-xs transition hover:border-primary"
+            className="btn btn-outline btn-sm"
           >
             {isPending ? "Sincronizando..." : "Sincronizar"}
           </button>
@@ -51,3 +51,4 @@ export function ChannelSyncActions({ channels }: { channels: ChannelStatus[] }) 
     </div>
   );
 }
+

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { useBrandingStore } from "@/stores/branding-store";
 
 const NAV_ITEMS = [
@@ -46,7 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen w-full lg:grid lg:grid-cols-[280px_1fr]">
-      <aside className="panel-strong sticky top-0 hidden h-screen flex-col gap-10 p-6 lg:flex">
+      <aside className="panel-strong no-hover sticky top-0 hidden h-screen flex-col gap-10 p-6 lg:flex">
         <BrandMark />
         <nav className="flex flex-col gap-2 text-sm">
           {NAV_ITEMS.map((item) => {
@@ -56,10 +55,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`rounded-2xl border px-4 py-3 transition ${
-                  isActive
-                    ? "border-transparent bg-primary text-white shadow-[0_20px_40px_rgba(0,0,0,0.18)]"
-                    : "border-border bg-surface-strong text-foreground hover:-translate-y-[1px] hover:border-primary"
+                className={`nav-card px-4 py-3 ${
+                  isActive ? "nav-card-active text-white" : "text-foreground"
                 }`}
               >
                 <p className="font-display text-base">{item.label}</p>
@@ -98,11 +95,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <ThemeToggle />
-            <button className="rounded-full border border-border px-4 py-2 text-sm text-foreground transition hover:border-primary">
+            <button className="btn btn-outline">
               Sincronizar canais
             </button>
-            <button className="rounded-full bg-primary px-4 py-2 text-sm text-white shadow-[0_14px_28px_rgba(0,0,0,0.2)]">
+            <button className="btn btn-primary">
               Nova reserva
             </button>
           </div>
@@ -115,10 +111,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`whitespace-nowrap rounded-full border px-3 py-1 ${
-                  isActive
-                    ? "border-transparent bg-primary text-white"
-                    : "border-border bg-surface-strong text-muted"
+                className={`nav-pill whitespace-nowrap ${
+                  isActive ? "nav-pill-active" : ""
                 }`}
               >
                 {item.label}

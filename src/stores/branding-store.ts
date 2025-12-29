@@ -1,41 +1,34 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type ThemeMode = "system" | "light" | "dark";
-
 export type BrandingColors = {
   primary: string;
   secondary: string;
   accent: string;
   background: string;
-  surface: string;
 };
 
 type BrandingState = {
   brandName: string;
   logoUrl: string;
-  mode: ThemeMode;
   colors: BrandingColors;
   setBrandName: (name: string) => void;
   setLogoUrl: (url: string) => void;
-  setMode: (mode: ThemeMode) => void;
   setColor: (key: keyof BrandingColors, value: string) => void;
   reset: () => void;
 };
 
 const DEFAULT_BRANDING: Omit<
   BrandingState,
-  "setBrandName" | "setLogoUrl" | "setMode" | "setColor" | "reset"
+  "setBrandName" | "setLogoUrl" | "setColor" | "reset"
 > = {
   brandName: "Vennity",
   logoUrl: "",
-  mode: "system",
   colors: {
-    primary: "#c65d43",
-    secondary: "#2e7c7a",
-    accent: "#e2a34c",
-    background: "#f7f2ea",
-    surface: "#fff8ef",
+    primary: "#a855f7",
+    secondary: "#60a5fa",
+    accent: "#f472b6",
+    background: "#030712",
   },
 };
 
@@ -45,7 +38,6 @@ export const useBrandingStore = create<BrandingState>()(
       ...DEFAULT_BRANDING,
       setBrandName: (brandName) => set({ brandName }),
       setLogoUrl: (logoUrl) => set({ logoUrl }),
-      setMode: (mode) => set({ mode }),
       setColor: (key, value) =>
         set((state) => ({
           colors: {
@@ -57,6 +49,17 @@ export const useBrandingStore = create<BrandingState>()(
     }),
     {
       name: "vennity-branding",
+      merge: (persisted, current) => {
+        const persistedState = persisted as Partial<BrandingState>;
+        return {
+          ...current,
+          ...persistedState,
+          colors: {
+            ...current.colors,
+            ...persistedState.colors,
+          },
+        };
+      },
     }
   )
 );

@@ -50,7 +50,7 @@ export default async function PricingPage() {
                 {suggestion.competitors.map((comp) => (
                   <div
                     key={comp.name}
-                    className="rounded-2xl border border-border bg-surface-strong p-4 text-sm"
+                    className="card-lite rounded-2xl border border-border bg-surface-strong p-4 text-sm"
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-display text-base">{comp.name}</span>
@@ -74,3 +74,4 @@ export default async function PricingPage() {
     </div>
   );
 }
+

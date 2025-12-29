@@ -25,7 +25,7 @@ export default async function FinancePage() {
           {Object.entries(revenue).map(([period, values]) => (
             <div
               key={period}
-              className="rounded-2xl border border-border bg-surface-strong p-4 text-sm"
+              className="card-lite rounded-2xl border border-border bg-surface-strong p-4 text-sm"
             >
               <p className="text-xs uppercase tracking-[0.2em] text-muted">
                 {period}
@@ -63,7 +63,7 @@ export default async function FinancePage() {
                 </div>
               ))
             )}
-            <div className="mt-4 rounded-2xl border border-border bg-surface-strong p-4">
+            <div className="mt-4 card-lite rounded-2xl border border-border bg-surface-strong p-4">
               <p className="text-xs uppercase tracking-[0.2em] text-muted">
                 Lucro por pacote
               </p>
@@ -101,7 +101,7 @@ export default async function FinancePage() {
               {invoices.map((invoice) => (
                 <div
                   key={invoice.id}
-                  className="flex items-center justify-between rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                  className="flex items-center justify-between card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
                 >
                   <span>{invoice.provider}</span>
                   <span className="font-display">
@@ -116,3 +116,4 @@ export default async function FinancePage() {
     </div>
   );
 }
+

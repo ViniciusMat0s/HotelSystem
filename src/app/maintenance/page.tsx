@@ -27,7 +27,7 @@ export default async function MaintenancePage() {
             {summary.openIssues.map((issue) => (
               <div
                 key={issue.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-2 card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
               >
                 <div>
                   <p className="font-display text-base">
@@ -60,7 +60,7 @@ export default async function MaintenancePage() {
                 return (
                   <div
                     key={`${item.roomId}-${item.category}`}
-                    className="flex items-center justify-between rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                    className="flex items-center justify-between card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
                   >
                     <span>Quarto {roomNumber}</span>
                     <span className="text-muted">
@@ -85,7 +85,7 @@ export default async function MaintenancePage() {
               {summary.vendors.map((vendor) => (
                 <div
                   key={vendor.id}
-                  className="rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                  className="card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-display text-base">{vendor.name}</span>
@@ -103,3 +103,4 @@ export default async function MaintenancePage() {
     </div>
   );
 }
+

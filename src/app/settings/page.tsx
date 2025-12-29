@@ -6,7 +6,7 @@ export default function SettingsPage() {
     <div className="space-y-8">
       <Panel
         title="White-label"
-        description="Atualize logo e cores sem depender de desenvolvimento."
+        description="Atualize logo, cores e fundo sem depender de desenvolvimento."
       >
         <BrandingForm />
       </Panel>

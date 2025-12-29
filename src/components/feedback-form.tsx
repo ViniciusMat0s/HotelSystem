@@ -17,23 +17,23 @@ export function FeedbackForm() {
         <input
           name="guestName"
           placeholder="Nome do hospede"
-          className="rounded-2xl border border-border bg-surface-strong px-4 py-3"
+          className="input-field"
         />
         <input
           name="email"
           type="email"
           placeholder="Email"
-          className="rounded-2xl border border-border bg-surface-strong px-4 py-3"
+          className="input-field"
         />
         <input
           name="reservationId"
           placeholder="Codigo da reserva (opcional)"
-          className="rounded-2xl border border-border bg-surface-strong px-4 py-3 md:col-span-2"
+          className="input-field md:col-span-2"
         />
       </div>
       <button
         type="submit"
-        className="rounded-full bg-primary px-5 py-2 text-sm text-white"
+        className="btn btn-primary"
       >
         Disparar feedback
       </button>

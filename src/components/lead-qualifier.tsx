@@ -18,37 +18,37 @@ export function LeadQualifier() {
         <input
           name="name"
           placeholder="Nome do hospede"
-          className="rounded-2xl border border-border bg-surface-strong px-4 py-3"
+          className="input-field"
         />
         <input
           name="contact"
           placeholder="Email ou WhatsApp"
-          className="rounded-2xl border border-border bg-surface-strong px-4 py-3"
+          className="input-field"
         />
         <input
           type="date"
           name="checkIn"
-          className="rounded-2xl border border-border bg-surface-strong px-4 py-3"
+          className="input-field"
         />
         <input
           type="date"
           name="checkOut"
-          className="rounded-2xl border border-border bg-surface-strong px-4 py-3"
+          className="input-field"
         />
         <input
           name="partySize"
           placeholder="Numero de pessoas"
-          className="rounded-2xl border border-border bg-surface-strong px-4 py-3"
+          className="input-field"
         />
         <input
           name="budgetMax"
           placeholder="Budget max (R$)"
-          className="rounded-2xl border border-border bg-surface-strong px-4 py-3"
+          className="input-field"
         />
       </div>
       <button
         type="submit"
-        className="rounded-full bg-primary px-5 py-2 text-sm text-white"
+        className="btn btn-primary"
       >
         Qualificar lead
       </button>
@@ -58,7 +58,7 @@ export function LeadQualifier() {
       ) : null}
 
       {state.status === "ok" && state.result ? (
-        <div className="rounded-2xl border border-border bg-surface-strong p-4">
+        <div className="card-lite rounded-2xl border border-border bg-surface-strong p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-display text-lg text-foreground">
               Score {state.result.score}
@@ -77,3 +77,4 @@ export function LeadQualifier() {
     </form>
   );
 }
+

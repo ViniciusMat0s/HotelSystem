@@ -19,10 +19,10 @@ export function StatCard({
       : "bg-primary/15 text-primary";
 
   return (
-    <div className="panel rounded-3xl p-5">
+    <div className="panel stat-card rounded-3xl p-5">
       <div className="flex items-center justify-between">
         <p className="text-xs uppercase tracking-[0.22em] text-muted">{label}</p>
-        <span className={`rounded-full px-2 py-1 text-xs ${accentClass}`}>
+        <span className={`pill rounded-full px-2 py-1 text-xs ${accentClass}`}>
           live
         </span>
       </div>
@@ -78,7 +78,7 @@ export function Pill({
       : "bg-surface-strong text-muted";
 
   return (
-    <span className={`rounded-full px-3 py-1 text-xs uppercase ${toneClass}`}>
+    <span className={`pill rounded-full px-3 py-1 text-xs uppercase ${toneClass}`}>
       {children}
     </span>
   );

@@ -127,7 +127,7 @@ export default async function DashboardPage() {
               IA coleta datas, orcamento e canal de origem. Leads qualificados
               seguem direto para o time humano.
             </p>
-            <div className="flex items-center justify-between rounded-2xl border border-border bg-surface-strong p-4">
+            <div className="flex items-center justify-between card-lite rounded-2xl border border-border bg-surface-strong p-4">
               <span>Score medio hoje</span>
               <span className="font-display text-2xl text-foreground">78</span>
             </div>
@@ -141,7 +141,7 @@ export default async function DashboardPage() {
             {snapshot.channels.map((channel) => (
               <div
                 key={channel.channel}
-                className="flex items-center justify-between rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                className="flex items-center justify-between card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
               >
                 <span>{channel.channel}</span>
                 <span className="text-xs text-muted">
@@ -160,3 +160,4 @@ export default async function DashboardPage() {
     </div>
   );
 }
+

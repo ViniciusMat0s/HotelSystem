@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
-import { Fraunces, JetBrains_Mono, Source_Sans_3 } from "next/font/google";
+import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { BrandingProvider } from "@/components/branding-provider";
 
-const displayFont = Fraunces({
+const displayFont = Inter({
   subsets: ["latin"],
   variable: "--font-display",
-  weight: ["400", "600", "700"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const bodyFont = Source_Sans_3({
+const bodyFont = Inter_Tight({
   subsets: ["latin"],
   variable: "--font-body",
   weight: ["400", "500", "600"],

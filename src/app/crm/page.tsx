@@ -33,7 +33,7 @@ export default async function CrmPage() {
           title="Perfis dificeis"
           description="Identificacao automatica de riscos."
         >
-          <div className="flex items-center justify-between rounded-2xl border border-border bg-surface-strong px-4 py-5 text-sm">
+          <div className="flex items-center justify-between card-lite rounded-2xl border border-border bg-surface-strong px-4 py-5 text-sm">
             <span>Clientes criticos</span>
             <span className="font-display text-2xl text-foreground">
               {crm.difficultGuests}
@@ -44,7 +44,7 @@ export default async function CrmPage() {
           title="Campanhas"
           description="Reciclagem e promocoes segmentadas."
         >
-          <div className="flex items-center justify-between rounded-2xl border border-border bg-surface-strong px-4 py-5 text-sm">
+          <div className="flex items-center justify-between card-lite rounded-2xl border border-border bg-surface-strong px-4 py-5 text-sm">
             <span>Ativas</span>
             <span className="font-display text-2xl text-foreground">
               {crm.activeCampaigns}
@@ -66,7 +66,7 @@ export default async function CrmPage() {
             {crm.campaigns.map((campaign) => (
               <div
                 key={campaign.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-2 card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
               >
                 <div>
                   <p className="font-display text-base">{campaign.name}</p>
@@ -92,7 +92,7 @@ export default async function CrmPage() {
             {achievements.map((achievement) => (
               <div
                 key={achievement.id}
-                className="rounded-2xl border border-border bg-surface-strong px-4 py-3 text-sm"
+                className="card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3 text-sm"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-display text-base">
@@ -111,3 +111,4 @@ export default async function CrmPage() {
     </div>
   );
 }
+
