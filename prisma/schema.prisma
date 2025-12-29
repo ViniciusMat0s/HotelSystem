@@ -1,0 +1,657 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum RoomCategory {
+  STANDARD
+  DELUXE
+  SUITE
+  FAMILY
+  VILLA
+  OTHER
+}
+
+enum ReservationStatus {
+  BOOKED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELED
+  NO_SHOW
+}
+
+enum ReservationSource {
+  DIRECT
+  BOOKING
+  WHATSAPP
+  WALK_IN
+  OTA
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  REFUNDED
+  FAILED
+}
+
+enum SeasonType {
+  HIGH
+  LOW
+}
+
+enum FinancialEntryType {
+  REVENUE
+  EXPENSE
+}
+
+enum FinancialCategory {
+  ROOM
+  PACKAGE
+  FOOD_BEVERAGE
+  OTHER
+}
+
+enum ProfitCenter {
+  ROOM
+  PACKAGE
+  CONSUMPTION
+  OTHER
+}
+
+enum FinancialSource {
+  RESERVATION
+  POS
+  INVOICE
+  MANUAL
+}
+
+enum RoomIssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum MaintenanceSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MaintenanceCategory {
+  PLUMBING
+  ELECTRICAL
+  HVAC
+  CLEANING
+  FURNITURE
+  INTERNET
+  SECURITY
+  OTHER
+}
+
+enum MaintenanceTaskStatus {
+  OPEN
+  SCHEDULED
+  COMPLETED
+  CANCELED
+}
+
+enum ExpenseProvider {
+  WATER
+  POWER
+  INTERNET
+  TV
+  OTHER
+}
+
+enum InvoiceStatus {
+  RECEIVED
+  PROCESSING
+  PAID
+  CANCELED
+}
+
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  NURTURE
+  UNQUALIFIED
+  ESCALATED
+}
+
+enum LeadSource {
+  WEB
+  WHATSAPP
+  BOOKING
+  PHONE
+}
+
+enum LeadSender {
+  GUEST
+  BOT
+  AGENT
+}
+
+enum ExternalChannel {
+  BOOKING
+  WHATSAPP
+}
+
+enum ChannelSyncStatus {
+  IDLE
+  SYNCING
+  OK
+  ERROR
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationType {
+  CONFIRMATION
+  LATE_ARRIVAL
+  FEEDBACK
+  PROMOTION
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum NoShowStatus {
+  PENDING
+  RESPONDED
+  ESCALATED
+  CLOSED
+}
+
+enum DigitalKeyStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum FeedbackStatus {
+  PENDING
+  SENT
+  RESPONDED
+}
+
+enum CampaignType {
+  PROMOTION
+  RECOVERY
+  LOYALTY
+  SURVEY
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELED
+}
+
+enum AchievementType {
+  MILESTONE
+  TROPHY
+  AWARD
+}
+
+enum GuestInteractionType {
+  STAY
+  REQUEST
+  COMPLAINT
+  PRAISE
+  NOTE
+}
+
+model Hotel {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  name           String
+  legalName      String?
+  brandName      String?
+  logoUrl        String?
+  primaryColor   String?
+  secondaryColor String?
+  accentColor    String?
+  timezone       String   @default("America/Sao_Paulo")
+  addressLine1   String?
+  city           String?
+  state          String?
+  country        String?  @default("BR")
+  rating         Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  rooms            Room[]
+  guests           Guest[]
+  reservations     Reservation[]
+  seasons          Season[]
+  financialEntries FinancialEntry[]
+  maintenanceVendors MaintenanceVendor[]
+  leads            Lead[]
+  notifications    Notification[]
+  digitalKeys      DigitalKey[]
+  feedbackRequests FeedbackRequest[]
+  campaigns        Campaign[]
+  achievements     Achievement[]
+  channelSyncs     ChannelSync[]
+  expenseInvoices  ExpenseInvoice[]
+  competitorHotels CompetitorHotel[]
+  weatherSnapshots WeatherSnapshot[]
+}
+
+model Room {
+  id         String     @id @default(cuid())
+  hotelId    String
+  number     String
+  name       String?
+  floor      Int?
+  category   RoomCategory @default(STANDARD)
+  status     RoomStatus @default(AVAILABLE)
+  baseRate   Decimal?
+  maxGuests  Int        @default(2)
+  features   String?
+  notes      String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  hotel        Hotel     @relation(fields: [hotelId], references: [id])
+  reservations Reservation[]
+  usageLogs    RoomUsageLog[]
+  issues       RoomIssue[]
+  digitalKeys  DigitalKey[]
+
+  @@unique([hotelId, number])
+}
+
+model Guest {
+  id             String   @id @default(cuid())
+  hotelId        String
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  documentId     String?
+  nationality    String?
+  marketingOptIn Boolean  @default(false)
+  profileNote    String?
+  difficultyScore Int     @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  hotel         Hotel              @relation(fields: [hotelId], references: [id])
+  reservations  Reservation[]
+  interactions  GuestInteraction[]
+  tags          GuestTag[]
+}
+
+model GuestInteraction {
+  id        String               @id @default(cuid())
+  guestId   String
+  type      GuestInteractionType
+  note      String?
+  createdAt DateTime             @default(now())
+
+  guest Guest @relation(fields: [guestId], references: [id])
+}
+
+model GuestTag {
+  id        String   @id @default(cuid())
+  guestId   String
+  label     String
+  createdAt DateTime @default(now())
+
+  guest Guest @relation(fields: [guestId], references: [id])
+}
+
+model Reservation {
+  id            String            @id @default(cuid())
+  hotelId       String
+  roomId        String?
+  guestId       String
+  status        ReservationStatus @default(BOOKED)
+  source        ReservationSource @default(DIRECT)
+  paymentStatus PaymentStatus     @default(PENDING)
+  packageType   String?
+  roomCategory  RoomCategory      @default(STANDARD)
+  checkIn       DateTime
+  checkOut      DateTime
+  adults        Int               @default(2)
+  children      Int               @default(0)
+  totalAmount   Decimal?
+  currency      String            @default("BRL")
+  seasonType    SeasonType?
+  notes         String?
+  paidAt        DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  hotel            Hotel            @relation(fields: [hotelId], references: [id])
+  room             Room?            @relation(fields: [roomId], references: [id])
+  guest            Guest            @relation(fields: [guestId], references: [id])
+  usageLogs        RoomUsageLog[]
+  financialEntries FinancialEntry[]
+  notifications    Notification[]
+  digitalKeys      DigitalKey[]
+  feedbackRequests FeedbackRequest[]
+  noShowCase       NoShowCase?
+}
+
+model RoomUsageLog {
+  id            String       @id @default(cuid())
+  roomId        String
+  reservationId String?
+  startedAt     DateTime
+  endedAt       DateTime?
+  note          String?
+  createdAt     DateTime     @default(now())
+
+  room        Room         @relation(fields: [roomId], references: [id])
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
+}
+
+model RoomIssue {
+  id            String             @id @default(cuid())
+  roomId        String
+  category      MaintenanceCategory
+  description   String?
+  status        RoomIssueStatus    @default(OPEN)
+  severity      MaintenanceSeverity @default(MEDIUM)
+  reportedAt    DateTime           @default(now())
+  resolvedAt    DateTime?
+  recurrenceCount Int              @default(0)
+  lastOccurredAt DateTime?
+
+  room  Room             @relation(fields: [roomId], references: [id])
+  tasks MaintenanceTask[]
+
+  @@index([roomId, status])
+}
+
+model MaintenanceTask {
+  id          String              @id @default(cuid())
+  roomIssueId String
+  vendorId    String?
+  status      MaintenanceTaskStatus @default(OPEN)
+  scheduledFor DateTime?
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime            @default(now())
+
+  issue  RoomIssue        @relation(fields: [roomIssueId], references: [id])
+  vendor MaintenanceVendor? @relation(fields: [vendorId], references: [id])
+}
+
+model MaintenanceVendor {
+  id         String             @id @default(cuid())
+  hotelId    String
+  name       String
+  category   MaintenanceCategory
+  phone      String?
+  email      String?
+  city       String?
+  rating     Float?
+  lastUsedAt DateTime?
+  createdAt  DateTime           @default(now())
+
+  hotel Hotel             @relation(fields: [hotelId], references: [id])
+  tasks MaintenanceTask[]
+}
+
+model Season {
+  id        String    @id @default(cuid())
+  hotelId   String
+  label     String
+  type      SeasonType
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime  @default(now())
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+model FinancialEntry {
+  id           String            @id @default(cuid())
+  hotelId      String
+  reservationId String?
+  occurredAt   DateTime
+  type         FinancialEntryType
+  category     FinancialCategory
+  profitCenter ProfitCenter
+  roomCategory RoomCategory?
+  packageType  String?
+  description  String?
+  grossAmount  Decimal?
+  netAmount    Decimal
+  taxAmount    Decimal?
+  currency     String            @default("BRL")
+  seasonType   SeasonType?
+  source       FinancialSource
+  createdAt    DateTime          @default(now())
+
+  hotel       Hotel        @relation(fields: [hotelId], references: [id])
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
+
+  @@index([hotelId, occurredAt])
+}
+
+model ExpenseInvoice {
+  id                 String        @id @default(cuid())
+  hotelId            String
+  provider           ExpenseProvider
+  invoiceNumber      String?
+  amount             Decimal
+  currency           String        @default("BRL")
+  billingPeriodStart DateTime?
+  billingPeriodEnd   DateTime?
+  dueDate            DateTime?
+  receivedAt         DateTime      @default(now())
+  emailMessageId     String?
+  status             InvoiceStatus @default(RECEIVED)
+  notes              String?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+model Lead {
+  id               String       @id @default(cuid())
+  hotelId          String
+  source           LeadSource
+  status           LeadStatus   @default(NEW)
+  score            Int          @default(0)
+  name             String?
+  contact          String?
+  checkIn          DateTime?
+  checkOut         DateTime?
+  partySize        Int?
+  budgetMin        Decimal?
+  budgetMax        Decimal?
+  desiredRoomCategory RoomCategory?
+  notes            String?
+  qualifiedAt      DateTime?
+  escalatedAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  hotel        Hotel        @relation(fields: [hotelId], references: [id])
+  interactions LeadMessage[]
+}
+
+model LeadMessage {
+  id        String     @id @default(cuid())
+  leadId    String
+  sender    LeadSender
+  message   String
+  createdAt DateTime   @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id])
+}
+
+model ChannelSync {
+  id         String            @id @default(cuid())
+  hotelId    String
+  channel    ExternalChannel
+  status     ChannelSyncStatus @default(IDLE)
+  lastSyncAt DateTime?
+  message    String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@unique([hotelId, channel])
+}
+
+model Notification {
+  id            String             @id @default(cuid())
+  hotelId       String
+  reservationId String?
+  channel       NotificationChannel
+  type          NotificationType
+  status        NotificationStatus @default(QUEUED)
+  toAddress     String?
+  subject       String?
+  payload       Json?
+  sentAt        DateTime?
+  createdAt     DateTime           @default(now())
+
+  hotel       Hotel        @relation(fields: [hotelId], references: [id])
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
+
+  @@index([hotelId, status])
+}
+
+model DigitalKey {
+  id            String          @id @default(cuid())
+  hotelId       String
+  reservationId String
+  roomId        String?
+  status        DigitalKeyStatus @default(PENDING)
+  provider      String?
+  keyCode       String
+  issuedAt      DateTime?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime        @default(now())
+
+  hotel       Hotel       @relation(fields: [hotelId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  room        Room?       @relation(fields: [roomId], references: [id])
+}
+
+model FeedbackRequest {
+  id            String        @id @default(cuid())
+  hotelId       String
+  reservationId String?
+  guestName     String?
+  guestEmail    String?
+  status        FeedbackStatus @default(PENDING)
+  sentAt        DateTime?
+  respondedAt   DateTime?
+  score         Int?
+  comment       String?
+  createdAt     DateTime      @default(now())
+
+  hotel       Hotel        @relation(fields: [hotelId], references: [id])
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
+}
+
+model Campaign {
+  id           String         @id @default(cuid())
+  hotelId      String
+  name         String
+  type         CampaignType
+  status       CampaignStatus @default(DRAFT)
+  segment      String?
+  content      String?
+  scheduledFor DateTime?
+  sentAt       DateTime?
+  createdAt    DateTime       @default(now())
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+model Achievement {
+  id          String         @id @default(cuid())
+  hotelId     String
+  type        AchievementType
+  title       String
+  description String?
+  achievedAt  DateTime       @default(now())
+  data        Json?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+model CompetitorHotel {
+  id           String   @id @default(cuid())
+  hotelId      String
+  name         String
+  city         String?
+  rating       Float?
+  reviewCount  Int?
+  distanceKm   Float?
+  lastCheckedAt DateTime?
+
+  hotel     Hotel                   @relation(fields: [hotelId], references: [id])
+  snapshots CompetitorRateSnapshot[]
+}
+
+model CompetitorRateSnapshot {
+  id                String   @id @default(cuid())
+  competitorHotelId String
+  date              DateTime
+  rate              Decimal
+  availability      Int?
+  weatherSummary    String?
+  createdAt         DateTime @default(now())
+
+  competitorHotel CompetitorHotel @relation(fields: [competitorHotelId], references: [id])
+}
+
+model WeatherSnapshot {
+  id                  String   @id @default(cuid())
+  hotelId             String
+  date                DateTime
+  summary             String?
+  temperatureC        Float?
+  precipitationChance Float?
+  createdAt           DateTime @default(now())
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+model NoShowCase {
+  id                String      @id @default(cuid())
+  reservationId     String      @unique
+  status            NoShowStatus @default(PENDING)
+  lastPingAt        DateTime?
+  response          String?
+  managerNotifiedAt DateTime?
+  createdAt         DateTime    @default(now())
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+}

@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f2ea;
+  --foreground: #1c1a17;
+  --surface: #fff8ef;
+  --surface-strong: #fffdf8;
+  --primary: #c65d43;
+  --secondary: #2e7c7a;
+  --accent: #e2a34c;
+  --muted: #d9d1c7;
+  --border: #e4d9cf;
+  --shadow-soft: 0 28px 60px rgba(18, 16, 12, 0.16);
+  --shadow-tight: 0 16px 32px rgba(18, 16, 12, 0.12);
+}
+
+html {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --background: #0f1113;
+  --foreground: #f2eee8;
+  --surface: #15191c;
+  --surface-strong: #1b2024;
+  --primary: #ff845c;
+  --secondary: #3eb4b0;
+  --accent: #f0b455;
+  --muted: #414a52;
+  --border: #252c32;
+  --shadow-soft: 0 30px 70px rgba(0, 0, 0, 0.35);
+  --shadow-tight: 0 20px 36px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-code);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100%;
+  background:
+    radial-gradient(1200px 600px at -10% -20%, rgba(198, 93, 67, 0.22), transparent 60%),
+    radial-gradient(900px 500px at 110% 0%, rgba(46, 124, 122, 0.2), transparent 55%),
+    linear-gradient(135deg, var(--background), #f2ece3 45%, #f7f2ea);
+  color: var(--foreground);
+  font-family: var(--font-body), sans-serif;
+  letter-spacing: 0.01em;
+}
+
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(1200px 600px at -10% -20%, rgba(255, 132, 92, 0.15), transparent 60%),
+    radial-gradient(900px 500px at 110% 0%, rgba(62, 180, 176, 0.16), transparent 55%),
+    linear-gradient(135deg, var(--background), #121519 45%, #0f1113);
+}
+
+.font-display {
+  font-family: var(--font-display), serif;
+  letter-spacing: 0.02em;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-tight);
+}
+
+.panel-strong {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+}
+
+@keyframes reveal-up {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.reveal-up {
+  animation: reveal-up 0.7s ease both;
+}
