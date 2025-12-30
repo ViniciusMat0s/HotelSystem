@@ -52,6 +52,11 @@ const formatCurrency = (value: string | null) => {
   }).format(parsed);
 };
 
+const normalizeRoomNumber = (value: string) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
 const initialActionState: RoomActionState = { status: "idle" };
 
 export function RoomsManager({ rooms }: { rooms: RoomItem[] }) {
@@ -63,6 +68,10 @@ export function RoomsManager({ rooms }: { rooms: RoomItem[] }) {
   const [result, setResult] = useState<RoomActionState | null>(null);
   const [resultTitle, setResultTitle] = useState("Atualizacao");
   const [resultOpen, setResultOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [pageSize, setPageSize] = useState(8);
+  const [page, setPage] = useState(1);
 
   const pendingDeleteRoom = useMemo(
     () => (confirmDeleteId ? rooms.find((room) => room.id === confirmDeleteId) ?? null : null),
@@ -89,6 +98,49 @@ export function RoomsManager({ rooms }: { rooms: RoomItem[] }) {
     });
   };
 
+  const filteredRooms = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return rooms.filter((room) => {
+      if (statusFilter !== "all" && room.status !== statusFilter) {
+        return false;
+      }
+      if (!query) return true;
+      const categoryLabel = CATEGORY_LABELS[room.category] ?? room.category;
+      const statusLabel = STATUS_LABELS[room.status] ?? room.status;
+      const haystack = [
+        room.number,
+        room.name ?? "",
+        room.category,
+        categoryLabel,
+        statusLabel,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [rooms, search, statusFilter]);
+
+  const sortedRooms = useMemo(() => {
+    const list = [...filteredRooms];
+    list.sort((a, b) => {
+      const aNum = normalizeRoomNumber(a.number);
+      const bNum = normalizeRoomNumber(b.number);
+      if (aNum !== null && bNum !== null) {
+        return aNum - bNum;
+      }
+      return a.number.localeCompare(b.number, "pt-BR");
+    });
+    return list;
+  }, [filteredRooms]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRooms.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+
+  const paginatedRooms = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return sortedRooms.slice(start, start + pageSize);
+  }, [currentPage, pageSize, sortedRooms]);
+
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -105,56 +157,137 @@ export function RoomsManager({ rooms }: { rooms: RoomItem[] }) {
         </button>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {rooms.length === 0 ? (
-          <p className="text-sm text-muted">Nenhum quarto cadastrado.</p>
-        ) : (
-          rooms.map((room) => {
-            const statusLabel = STATUS_LABELS[room.status] ?? room.status;
-            const statusTone =
-              room.status === "AVAILABLE"
-                ? "positive"
-                : room.status === "OCCUPIED"
-                ? "warning"
-                : "critical";
-            return (
-              <div
-                key={room.id}
-                className="card-lite rounded-2xl border border-border bg-surface-strong p-4 text-sm"
+      <div className="mt-4 space-y-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <label className="space-y-2 md:col-span-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+              Buscar
+            </span>
+            <input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              className="input-field"
+              placeholder="Numero, nome ou categoria"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+              Status
+            </span>
+            <select
+              className="input-field"
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="all">Todos</option>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+          <span>{sortedRooms.length} quartos encontrados</span>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2">
+              <span>Por pagina</span>
+              <select
+                className="input-field w-[90px]"
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(1);
+                }}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-display text-lg">Quarto {room.number}</p>
-                  <Pill tone={statusTone}>{statusLabel}</Pill>
+                {[8, 12, 20].map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage <= 1}
+            >
+              Anterior
+            </button>
+            <span>
+              Pagina {currentPage} de {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage >= totalPages}
+            >
+              Proxima
+            </button>
+          </div>
+        </div>
+
+        {sortedRooms.length === 0 ? (
+          <p className="text-sm text-muted">Nenhum quarto encontrado.</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {paginatedRooms.map((room) => {
+              const statusLabel = STATUS_LABELS[room.status] ?? room.status;
+              const statusTone =
+                room.status === "AVAILABLE"
+                  ? "positive"
+                  : room.status === "OCCUPIED"
+                  ? "warning"
+                  : "critical";
+              return (
+                <div
+                  key={room.id}
+                  className="card-lite rounded-2xl border border-border bg-surface-strong p-4 text-sm"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-display text-lg">Quarto {room.number}</p>
+                    <Pill tone={statusTone}>{statusLabel}</Pill>
+                  </div>
+                  <p className="mt-2 text-xs text-muted">
+                    {CATEGORY_LABELS[room.category] ?? room.category}
+                  </p>
+                  <div className="mt-3 grid gap-2 text-xs text-muted sm:grid-cols-2">
+                    <span>Andar: {room.floor ?? "--"}</span>
+                    <span>Max: {room.maxGuests}</span>
+                    <span>Diaria: {formatCurrency(room.baseRate)}</span>
+                    <span>Nome: {room.name ?? "--"}</span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditing(room)}
+                      className="btn btn-outline btn-sm"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(room.id)}
+                      className="btn btn-ghost btn-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={isPending}
+                    >
+                      {isPending ? "Excluindo..." : "Excluir"}
+                    </button>
+                  </div>
                 </div>
-                <p className="mt-2 text-xs text-muted">
-                  {CATEGORY_LABELS[room.category] ?? room.category}
-                </p>
-                <div className="mt-3 grid gap-2 text-xs text-muted sm:grid-cols-2">
-                  <span>Andar: {room.floor ?? "--"}</span>
-                  <span>Max: {room.maxGuests}</span>
-                  <span>Diaria: {formatCurrency(room.baseRate)}</span>
-                  <span>Nome: {room.name ?? "--"}</span>
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(room)}
-                    className="btn btn-outline btn-sm"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(room.id)}
-                    className="btn btn-ghost btn-sm disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={isPending}
-                  >
-                    {isPending ? "Excluindo..." : "Excluir"}
-                  </button>
-                </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </div>
 

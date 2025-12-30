@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import {
   requestFeedbackAction,
   type FeedbackRequestState,
@@ -11,17 +11,21 @@ const initialState: FeedbackRequestState = { status: "idle" };
 
 export function FeedbackForm() {
   const [state, formAction] = useActionState(requestFeedbackAction, initialState);
-  const [modalOpen, setModalOpen] = useState(false);
-
-  useEffect(() => {
-    if (state.status !== "idle") {
-      setModalOpen(true);
-    }
-  }, [state]);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
 
   const modalTitle =
     state.status === "error" ? "Feedback nao enviado" : "Feedback agendado";
   const modalTone = state.status === "error" ? "error" : "success";
+  const modalKey =
+    state.status === "idle"
+      ? null
+      : [state.status, state.message ?? ""].join("|");
+  const isModalOpen = modalKey !== null && modalKey !== dismissedKey;
+  const handleModalClose = () => {
+    if (modalKey) {
+      setDismissedKey(modalKey);
+    }
+  };
 
   return (
     <>
@@ -49,11 +53,11 @@ export function FeedbackForm() {
         </button>
       </form>
       <ActionModal
-        open={modalOpen && state.status !== "idle"}
+        open={isModalOpen}
         tone={modalTone}
         title={modalTitle}
         description={state.message}
-        onClose={() => setModalOpen(false)}
+        onClose={handleModalClose}
         actionLabel="Ok, entendi"
       />
     </>

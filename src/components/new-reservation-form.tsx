@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   createReservationAction,
@@ -82,13 +82,7 @@ export function NewReservationForm({
   );
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [roomCategory, setRoomCategory] = useState("STANDARD");
-  const [modalOpen, setModalOpen] = useState(false);
-
-  useEffect(() => {
-    if (state.status !== "idle") {
-      setModalOpen(true);
-    }
-  }, [state]);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
 
   const guestOptions = useMemo(
     () =>
@@ -111,6 +105,16 @@ export function NewReservationForm({
     state.status === "ok" && state.reservationId
       ? `Codigo: ${state.reservationId}`
       : undefined;
+  const modalKey =
+    state.status === "idle"
+      ? null
+      : [state.status, state.message ?? "", state.reservationId ?? ""].join("|");
+  const isModalOpen = modalKey !== null && modalKey !== dismissedKey;
+  const handleModalClose = () => {
+    if (modalKey) {
+      setDismissedKey(modalKey);
+    }
+  };
 
   return (
     <>
@@ -366,12 +370,12 @@ export function NewReservationForm({
 
       </form>
       <ActionModal
-        open={modalOpen && state.status !== "idle"}
+        open={isModalOpen}
         tone={modalTone}
         title={modalTitle}
         description={state.message}
         details={modalDetails}
-        onClose={() => setModalOpen(false)}
+        onClose={handleModalClose}
         actionLabel="Ok, entendi"
       />
     </>

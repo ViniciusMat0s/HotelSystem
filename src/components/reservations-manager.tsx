@@ -146,10 +146,6 @@ export function ReservationsManager({
     [rooms]
   );
 
-  useEffect(() => {
-    setPage(1);
-  }, [statusFilter, paymentFilter, dateFrom, dateTo, sortOrder, pageSize]);
-
   const filteredReservations = useMemo(() => {
     const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
     const toDate = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
@@ -196,17 +192,12 @@ export function ReservationsManager({
   }, [filteredReservations, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(sortedReservations.length / pageSize));
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
+  const currentPage = Math.min(page, totalPages);
 
   const paginatedReservations = useMemo(() => {
-    const start = (page - 1) * pageSize;
+    const start = (currentPage - 1) * pageSize;
     return sortedReservations.slice(start, start + pageSize);
-  }, [page, pageSize, sortedReservations]);
+  }, [currentPage, pageSize, sortedReservations]);
 
   const handleResult = (state: ReservationActionState, title: string) => {
     setResult(state);
@@ -247,7 +238,10 @@ export function ReservationsManager({
             <select
               className="input-field"
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setPage(1);
+              }}
             >
               <option value="all">Todos</option>
               {Object.entries(STATUS_LABELS).map(([value, label]) => (
@@ -264,7 +258,10 @@ export function ReservationsManager({
             <select
               className="input-field"
               value={paymentFilter}
-              onChange={(event) => setPaymentFilter(event.target.value)}
+              onChange={(event) => {
+                setPaymentFilter(event.target.value);
+                setPage(1);
+              }}
             >
               <option value="all">Todos</option>
               {Object.entries(PAYMENT_LABELS).map(([value, label]) => (
@@ -282,7 +279,10 @@ export function ReservationsManager({
               type="date"
               className="input-field"
               value={dateFrom}
-              onChange={(event) => setDateFrom(event.target.value)}
+              onChange={(event) => {
+                setDateFrom(event.target.value);
+                setPage(1);
+              }}
             />
           </label>
           <label className="space-y-2">
@@ -293,7 +293,10 @@ export function ReservationsManager({
               type="date"
               className="input-field"
               value={dateTo}
-              onChange={(event) => setDateTo(event.target.value)}
+              onChange={(event) => {
+                setDateTo(event.target.value);
+                setPage(1);
+              }}
             />
           </label>
           <label className="space-y-2">
@@ -303,7 +306,10 @@ export function ReservationsManager({
             <select
               className="input-field"
               value={sortOrder}
-              onChange={(event) => setSortOrder(event.target.value)}
+              onChange={(event) => {
+                setSortOrder(event.target.value);
+                setPage(1);
+              }}
             >
               <option value="created_desc">Criadas recentes</option>
               <option value="created_asc">Criadas antigas</option>
@@ -320,7 +326,10 @@ export function ReservationsManager({
             <select
               className="input-field"
               value={pageSize}
-              onChange={(event) => setPageSize(Number(event.target.value))}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setPage(1);
+              }}
             >
               {[8, 12, 20].map((value) => (
                 <option key={value} value={value}>
@@ -337,19 +346,19 @@ export function ReservationsManager({
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              disabled={page <= 1}
+              onClick={() => setPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage <= 1}
             >
               Anterior
             </button>
             <span>
-              Pagina {page} de {totalPages}
+              Pagina {currentPage} de {totalPages}
             </span>
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={page >= totalPages}
+              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage >= totalPages}
             >
               Proxima
             </button>

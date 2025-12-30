@@ -36,6 +36,9 @@ export function GuestsManager({ guests }: { guests: GuestItem[] }) {
   const [result, setResult] = useState<GuestActionState | null>(null);
   const [resultTitle, setResultTitle] = useState("Atualizacao");
   const [resultOpen, setResultOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [pageSize, setPageSize] = useState(8);
+  const [page, setPage] = useState(1);
 
   const pendingDeleteGuest = useMemo(
     () => (confirmDeleteId ? guests.find((guest) => guest.id === confirmDeleteId) ?? null : null),
@@ -62,6 +65,32 @@ export function GuestsManager({ guests }: { guests: GuestItem[] }) {
     });
   };
 
+  const filteredGuests = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return guests;
+    return guests.filter((guest) => {
+      const haystack = [
+        guest.firstName,
+        guest.lastName,
+        guest.email ?? "",
+        guest.phone ?? "",
+        guest.documentId ?? "",
+        guest.nationality ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [guests, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredGuests.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+
+  const paginatedGuests = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredGuests.slice(start, start + pageSize);
+  }, [currentPage, filteredGuests, pageSize]);
+
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -78,66 +107,127 @@ export function GuestsManager({ guests }: { guests: GuestItem[] }) {
         </button>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        {guests.length === 0 ? (
-          <p className="text-sm text-muted">Nenhum hospede cadastrado.</p>
-        ) : (
-          guests.map((guest) => {
-            const scoreTone =
-              guest.difficultyScore >= 7
-                ? "critical"
-                : guest.difficultyScore >= 4
-                ? "warning"
-                : "positive";
-            return (
-              <div
-                key={guest.id}
-                className="card-lite rounded-2xl border border-border bg-surface-strong p-4 text-sm"
+      <div className="mt-4 space-y-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="space-y-2 md:col-span-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+              Buscar
+            </span>
+            <input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              className="input-field"
+              placeholder="Nome, email, telefone ou documento"
+            />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+          <span>{filteredGuests.length} hospedes encontrados</span>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2">
+              <span>Por pagina</span>
+              <select
+                className="input-field w-[90px]"
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(1);
+                }}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="font-display text-base text-foreground">
-                      {guest.firstName} {guest.lastName}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {guest.email ?? "Email nao informado"}{" "}
-                      {guest.phone ? `- ${guest.phone}` : ""}
-                    </p>
+                {[8, 12, 20].map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage <= 1}
+            >
+              Anterior
+            </button>
+            <span>
+              Pagina {currentPage} de {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage >= totalPages}
+            >
+              Proxima
+            </button>
+          </div>
+        </div>
+
+        {filteredGuests.length === 0 ? (
+          <p className="text-sm text-muted">Nenhum hospede encontrado.</p>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {paginatedGuests.map((guest) => {
+              const scoreTone =
+                guest.difficultyScore >= 7
+                  ? "critical"
+                  : guest.difficultyScore >= 4
+                  ? "warning"
+                  : "positive";
+              return (
+                <div
+                  key={guest.id}
+                  className="card-lite rounded-2xl border border-border bg-surface-strong p-4 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-display text-base text-foreground">
+                        {guest.firstName} {guest.lastName}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {guest.email ?? "Email nao informado"}{" "}
+                        {guest.phone ? `- ${guest.phone}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {guest.marketingOptIn ? (
+                        <Pill tone="positive">Opt-in</Pill>
+                      ) : (
+                        <Pill tone="neutral">Sem opt-in</Pill>
+                      )}
+                      <Pill tone={scoreTone}>Score {guest.difficultyScore}</Pill>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {guest.marketingOptIn ? (
-                      <Pill tone="positive">Opt-in</Pill>
-                    ) : (
-                      <Pill tone="neutral">Sem opt-in</Pill>
-                    )}
-                    <Pill tone={scoreTone}>Score {guest.difficultyScore}</Pill>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+                    <span>
+                      Documento: {guest.documentId ?? "--"} - {guest.nationality ?? "--"}
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditing(guest)}
+                        className="btn btn-outline btn-sm"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(guest.id)}
+                        className="btn btn-ghost btn-sm disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={isPending}
+                      >
+                        {isPending ? "Excluindo..." : "Excluir"}
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
-                  <span>
-                    Documento: {guest.documentId ?? "--"} - {guest.nationality ?? "--"}
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditing(guest)}
-                      className="btn btn-outline btn-sm"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(guest.id)}
-                      className="btn btn-ghost btn-sm disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={isPending}
-                    >
-                      {isPending ? "Excluindo..." : "Excluir"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </div>
 
