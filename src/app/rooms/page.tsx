@@ -1,4 +1,5 @@
 import { Panel, StatCard, Pill } from "@/components/cards";
+import { RoomsManager } from "@/components/rooms-manager";
 import { RoomIssueStatus } from "@/generated/prisma";
 import { ensureDefaultHotel } from "@/lib/hotel";
 import { prisma } from "@/lib/prisma";
@@ -10,7 +11,7 @@ export default async function RoomsPage() {
   const occupancy = await getOccupancyReport(hotel.id);
   const maintenance = await getMaintenanceSummary(hotel.id);
 
-  const rooms = await prisma.room.findMany({
+  const roomCards = await prisma.room.findMany({
     where: { hotelId: hotel.id },
     include: {
       issues: {
@@ -20,6 +21,11 @@ export default async function RoomsPage() {
     },
     orderBy: { number: "asc" },
     take: 12,
+  });
+
+  const roomsForManager = await prisma.room.findMany({
+    where: { hotelId: hotel.id },
+    orderBy: { number: "asc" },
   });
 
   const usageLogs = await prisma.roomUsageLog.findMany({
@@ -64,13 +70,13 @@ export default async function RoomsPage() {
           title="Livro de reservas"
           description="Status por quarto e alertas de manutencao."
         >
-          {rooms.length === 0 ? (
+          {roomCards.length === 0 ? (
             <p className="text-sm text-muted">
               Cadastre os quartos para acompanhar ocupacao e manutencao.
             </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {rooms.map((room) => (
+              {roomCards.map((room) => (
                 <div
                   key={room.id}
                   className="card-lite rounded-2xl border border-border bg-surface-strong p-4 text-sm"
@@ -117,6 +123,26 @@ export default async function RoomsPage() {
           )}
         </Panel>
       </section>
+
+      <Panel
+        title="Gestao de quartos"
+        description="CRUD completo com confirmacao e status."
+      >
+        <RoomsManager
+          rooms={roomsForManager.map((room) => ({
+            id: room.id,
+            number: room.number,
+            name: room.name ?? null,
+            floor: room.floor ?? null,
+            category: room.category,
+            status: room.status,
+            baseRate: room.baseRate ? room.baseRate.toString() : null,
+            maxGuests: room.maxGuests,
+            features: room.features ?? null,
+            notes: room.notes ?? null,
+          }))}
+        />
+      </Panel>
 
       <Panel
         title="Historico detalhado"

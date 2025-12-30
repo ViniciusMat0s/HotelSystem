@@ -1,4 +1,5 @@
 import { Panel, Pill } from "@/components/cards";
+import { GuestsManager } from "@/components/guests-manager";
 import { getCrmSnapshot } from "@/lib/crm";
 import { ensureDefaultHotel } from "@/lib/hotel";
 import { prisma } from "@/lib/prisma";
@@ -11,6 +12,25 @@ export default async function CrmPage() {
     orderBy: { achievedAt: "desc" },
     take: 4,
   });
+
+  const guests = await prisma.guest.findMany({
+    where: { hotelId: hotel.id },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+  });
+
+  const guestItems = guests.map((guest) => ({
+    id: guest.id,
+    firstName: guest.firstName,
+    lastName: guest.lastName,
+    email: guest.email ?? null,
+    phone: guest.phone ?? null,
+    documentId: guest.documentId ?? null,
+    nationality: guest.nationality ?? null,
+    marketingOptIn: guest.marketingOptIn,
+    profileNote: guest.profileNote ?? null,
+    difficultyScore: guest.difficultyScore,
+  }));
 
   return (
     <div className="space-y-8">
@@ -77,6 +97,13 @@ export default async function CrmPage() {
             ))}
           </div>
         )}
+      </Panel>
+
+      <Panel
+        title="Gestao de hospedes"
+        description="Cadastre, edite e remova perfis."
+      >
+        <GuestsManager guests={guestItems} />
       </Panel>
 
       <Panel
