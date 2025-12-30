@@ -1,6 +1,7 @@
 import { Panel } from "@/components/cards";
 import { ChannelSyncActions } from "@/components/channel-sync";
 import { LeadQualifier } from "@/components/lead-qualifier";
+import { ReservationsManager } from "@/components/reservations-manager";
 import { NotificationStatus, NotificationType } from "@/generated/prisma";
 import { ensureDefaultHotel } from "@/lib/hotel";
 import { getChannelSyncStatus } from "@/lib/integrations";
@@ -21,6 +22,55 @@ export default async function ReservationsPage() {
   const pendingConfirmations = confirmations.filter(
     (item) => item.status === NotificationStatus.QUEUED
   ).length;
+
+  const reservations = await prisma.reservation.findMany({
+    where: { hotelId: hotel.id },
+    include: {
+      guest: true,
+      room: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
+  const rooms = await prisma.room.findMany({
+    where: { hotelId: hotel.id },
+    select: {
+      id: true,
+      number: true,
+      status: true,
+      category: true,
+    },
+    orderBy: { number: "asc" },
+  });
+
+  const reservationItems = reservations.map((reservation) => ({
+    id: reservation.id,
+    checkIn: reservation.checkIn.toISOString(),
+    checkOut: reservation.checkOut.toISOString(),
+    status: reservation.status,
+    paymentStatus: reservation.paymentStatus,
+    source: reservation.source,
+    roomId: reservation.roomId,
+    roomCategory: reservation.roomCategory,
+    adults: reservation.adults,
+    children: reservation.children,
+    totalAmount: reservation.totalAmount ? reservation.totalAmount.toString() : null,
+    packageType: reservation.packageType ?? null,
+    seasonType: reservation.seasonType ?? null,
+    notes: reservation.notes ?? null,
+    guest: {
+      firstName: reservation.guest.firstName,
+      lastName: reservation.guest.lastName,
+    },
+    room: reservation.room
+      ? {
+          id: reservation.room.id,
+          number: reservation.room.number,
+          category: reservation.room.category,
+        }
+      : null,
+  }));
 
   return (
     <div className="space-y-8">
@@ -65,6 +115,13 @@ export default async function ReservationsPage() {
             ))}
           </div>
         )}
+      </Panel>
+
+      <Panel
+        title="Reservas recentes"
+        description="Edite, confirme ou cancele reservas rapidamente."
+      >
+        <ReservationsManager reservations={reservationItems} rooms={rooms} />
       </Panel>
     </div>
   );
