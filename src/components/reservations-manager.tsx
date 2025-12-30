@@ -8,10 +8,12 @@ import {
   type ReservationActionState,
 } from "@/actions/reservation";
 import { ActionModal } from "@/components/action-modal";
+import { ConfirmModal } from "@/components/confirm-modal";
 import { Pill } from "@/components/cards";
 
 type ReservationItem = {
   id: string;
+  createdAt: string;
   checkIn: string;
   checkOut: string;
   status: string;
@@ -93,6 +95,11 @@ const formatDateInput = (value: string) => {
   return date.toISOString().slice(0, 10);
 };
 
+const toTimestamp = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+};
+
 const formatCurrency = (value: string | null) => {
   if (!value) return "--";
   const parsed = Number(value);
@@ -119,6 +126,14 @@ export function ReservationsManager({
   const [result, setResult] = useState<ReservationActionState | null>(null);
   const [resultTitle, setResultTitle] = useState("Atualizacao");
   const [resultOpen, setResultOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortOrder, setSortOrder] = useState("created_desc");
+  const [pageSize, setPageSize] = useState(8);
+  const [page, setPage] = useState(1);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
   const roomOptions = useMemo(
     () =>
@@ -131,6 +146,68 @@ export function ReservationsManager({
     [rooms]
   );
 
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, paymentFilter, dateFrom, dateTo, sortOrder, pageSize]);
+
+  const filteredReservations = useMemo(() => {
+    const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+    const toDate = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
+
+    return reservations.filter((item) => {
+      if (statusFilter !== "all" && item.status !== statusFilter) return false;
+      if (paymentFilter !== "all" && item.paymentStatus !== paymentFilter) return false;
+
+      if (fromDate || toDate) {
+        const checkInDate = new Date(item.checkIn);
+        if (Number.isNaN(checkInDate.getTime())) return false;
+        if (fromDate && checkInDate < fromDate) return false;
+        if (toDate && checkInDate > toDate) return false;
+      }
+
+      return true;
+    });
+  }, [reservations, statusFilter, paymentFilter, dateFrom, dateTo]);
+
+  const sortedReservations = useMemo(() => {
+    const list = [...filteredReservations];
+    list.sort((a, b) => {
+      if (sortOrder === "created_desc") {
+        return toTimestamp(b.createdAt) - toTimestamp(a.createdAt);
+      }
+      if (sortOrder === "created_asc") {
+        return toTimestamp(a.createdAt) - toTimestamp(b.createdAt);
+      }
+      if (sortOrder === "checkin_asc") {
+        return toTimestamp(a.checkIn) - toTimestamp(b.checkIn);
+      }
+      if (sortOrder === "checkin_desc") {
+        return toTimestamp(b.checkIn) - toTimestamp(a.checkIn);
+      }
+      if (sortOrder === "amount_desc") {
+        return Number(b.totalAmount ?? 0) - Number(a.totalAmount ?? 0);
+      }
+      if (sortOrder === "amount_asc") {
+        return Number(a.totalAmount ?? 0) - Number(b.totalAmount ?? 0);
+      }
+      return 0;
+    });
+    return list;
+  }, [filteredReservations, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedReservations.length / pageSize));
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const paginatedReservations = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return sortedReservations.slice(start, start + pageSize);
+  }, [page, pageSize, sortedReservations]);
+
   const handleResult = (state: ReservationActionState, title: string) => {
     setResult(state);
     setResultTitle(title);
@@ -139,19 +216,150 @@ export function ReservationsManager({
   };
 
   const handleCancel = (reservationId: string) => {
+    setConfirmCancelId(reservationId);
+  };
+
+  const pendingCancelReservation = useMemo(
+    () =>
+      confirmCancelId
+        ? reservations.find((item) => item.id === confirmCancelId) ?? null
+        : null,
+    [confirmCancelId, reservations]
+  );
+
+  const confirmCancel = () => {
+    if (!confirmCancelId) return;
     startTransition(async () => {
-      const response = await cancelReservationAction(reservationId);
+      const response = await cancelReservationAction(confirmCancelId);
+      setConfirmCancelId(null);
       handleResult(response, "Reserva cancelada");
     });
   };
 
   return (
     <>
-      <div className="space-y-3 text-sm">
-        {reservations.length === 0 ? (
+      <div className="space-y-6 text-sm">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <label className="space-y-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+              Status
+            </span>
+            <select
+              className="input-field"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+            >
+              <option value="all">Todos</option>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+              Pagamento
+            </span>
+            <select
+              className="input-field"
+              value={paymentFilter}
+              onChange={(event) => setPaymentFilter(event.target.value)}
+            >
+              <option value="all">Todos</option>
+              {Object.entries(PAYMENT_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+              Data inicio
+            </span>
+            <input
+              type="date"
+              className="input-field"
+              value={dateFrom}
+              onChange={(event) => setDateFrom(event.target.value)}
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+              Data fim
+            </span>
+            <input
+              type="date"
+              className="input-field"
+              value={dateTo}
+              onChange={(event) => setDateTo(event.target.value)}
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+              Ordenar
+            </span>
+            <select
+              className="input-field"
+              value={sortOrder}
+              onChange={(event) => setSortOrder(event.target.value)}
+            >
+              <option value="created_desc">Criadas recentes</option>
+              <option value="created_asc">Criadas antigas</option>
+              <option value="checkin_asc">Check-in proximo</option>
+              <option value="checkin_desc">Check-in distante</option>
+              <option value="amount_desc">Valor maior</option>
+              <option value="amount_asc">Valor menor</option>
+            </select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+              Por pagina
+            </span>
+            <select
+              className="input-field"
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value))}
+            >
+              {[8, 12, 20].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+          <span>{sortedReservations.length} reservas encontradas</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page <= 1}
+            >
+              Anterior
+            </button>
+            <span>
+              Pagina {page} de {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={page >= totalPages}
+            >
+              Proxima
+            </button>
+          </div>
+        </div>
+
+        {sortedReservations.length === 0 ? (
           <p className="text-sm text-muted">Nenhuma reserva encontrada.</p>
         ) : (
-          reservations.map((reservation) => {
+          paginatedReservations.map((reservation) => {
             const guestName = `${reservation.guest.firstName} ${reservation.guest.lastName}`;
             const statusLabel = STATUS_LABELS[reservation.status] ?? reservation.status;
             const paymentLabel = PAYMENT_LABELS[reservation.paymentStatus] ?? reservation.paymentStatus;
@@ -227,6 +435,22 @@ export function ReservationsManager({
         description={result?.message}
         onClose={() => setResultOpen(false)}
         actionLabel="Ok, entendi"
+      />
+
+      <ConfirmModal
+        open={Boolean(confirmCancelId)}
+        tone="danger"
+        title="Confirmar cancelamento"
+        description={
+          pendingCancelReservation
+            ? `Cancelar reserva de ${pendingCancelReservation.guest.firstName} ${pendingCancelReservation.guest.lastName}?`
+            : "Deseja cancelar esta reserva?"
+        }
+        confirmLabel="Sim, cancelar"
+        cancelLabel="Voltar"
+        onConfirm={confirmCancel}
+        onCancel={() => setConfirmCancelId(null)}
+        isBusy={isPending}
       />
     </>
   );

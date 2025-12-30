@@ -30,7 +30,7 @@ export default async function ReservationsPage() {
       room: true,
     },
     orderBy: { createdAt: "desc" },
-    take: 20,
+    take: 200,
   });
 
   const rooms = await prisma.room.findMany({
@@ -46,6 +46,7 @@ export default async function ReservationsPage() {
 
   const reservationItems = reservations.map((reservation) => ({
     id: reservation.id,
+    createdAt: reservation.createdAt.toISOString(),
     checkIn: reservation.checkIn.toISOString(),
     checkOut: reservation.checkOut.toISOString(),
     status: reservation.status,
