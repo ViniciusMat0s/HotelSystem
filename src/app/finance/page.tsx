@@ -1,5 +1,7 @@
 import { Panel } from "@/components/cards";
+import { FinancialEntriesManager } from "@/components/financial-entries-manager";
 import { ExpenseIngestForm } from "@/components/expense-ingest-form";
+import { RecurringExpensesManager } from "@/components/recurring-expenses-manager";
 import { formatCurrency } from "@/lib/format";
 import { ensureDefaultHotel } from "@/lib/hotel";
 import { prisma } from "@/lib/prisma";
@@ -57,6 +59,52 @@ export default async function FinancePage() {
   const profitByPackage = [...profit.byPackage].sort((a, b) => b.total - a.total);
   const profitByRoom = [...profit.byRoom].sort((a, b) => b.total - a.total);
 
+  const entries = await prisma.financialEntry.findMany({
+    where: { hotelId: hotel.id },
+    orderBy: { occurredAt: "desc" },
+    take: 120,
+  });
+
+  const entryItems = entries.map((entry) => ({
+    id: entry.id,
+    occurredAt: entry.occurredAt.toISOString(),
+    type: entry.type,
+    category: entry.category,
+    profitCenter: entry.profitCenter,
+    roomCategory: entry.roomCategory ?? null,
+    packageType: entry.packageType ?? null,
+    description: entry.description ?? null,
+    grossAmount: entry.grossAmount ? entry.grossAmount.toString() : null,
+    netAmount: entry.netAmount.toString(),
+    taxAmount: entry.taxAmount ? entry.taxAmount.toString() : null,
+    currency: entry.currency,
+    seasonType: entry.seasonType ?? null,
+    source: entry.source,
+    reservationId: entry.reservationId ?? null,
+  }));
+
+  const recurringExpenses = await prisma.recurringExpense.findMany({
+    where: { hotelId: hotel.id },
+    orderBy: { nextRunAt: "asc" },
+  });
+
+  const recurringItems = recurringExpenses.map((item) => ({
+    id: item.id,
+    name: item.name,
+    provider: item.provider,
+    description: item.description ?? null,
+    amount: item.amount.toString(),
+    currency: item.currency,
+    category: item.category,
+    profitCenter: item.profitCenter,
+    seasonType: item.seasonType ?? null,
+    frequency: item.frequency,
+    interval: item.interval,
+    nextRunAt: item.nextRunAt.toISOString(),
+    lastRunAt: item.lastRunAt ? item.lastRunAt.toISOString() : null,
+    active: item.active,
+  }));
+
   const invoices = await prisma.expenseInvoice.findMany({
     where: { hotelId: hotel.id },
     orderBy: { receivedAt: "desc" },
@@ -88,6 +136,20 @@ export default async function FinancePage() {
             </div>
           ))}
         </div>
+      </Panel>
+
+      <Panel
+        title="Lancamentos financeiros"
+        description="Controle manual de receitas e despesas."
+      >
+        <FinancialEntriesManager entries={entryItems} />
+      </Panel>
+
+      <Panel
+        title="Recorrencias de despesas"
+        description="Agende contas fixas para gerar lancamentos automaticos."
+      >
+        <RecurringExpensesManager items={recurringItems} />
       </Panel>
 
       <section className="grid gap-6 lg:grid-cols-2">

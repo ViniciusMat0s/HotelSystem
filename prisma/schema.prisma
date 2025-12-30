@@ -53,6 +53,13 @@ enum SeasonType {
   LOW
 }
 
+enum RecurrenceFrequency {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
 enum FinancialEntryType {
   REVENUE
   EXPENSE
@@ -250,6 +257,7 @@ model Hotel {
   reservations     Reservation[]
   seasons          Season[]
   financialEntries FinancialEntry[]
+  recurringExpenses RecurringExpense[]
   maintenanceVendors MaintenanceVendor[]
   leads            Lead[]
   notifications    Notification[]
@@ -437,6 +445,7 @@ model FinancialEntry {
   id           String            @id @default(cuid())
   hotelId      String
   reservationId String?
+  recurringExpenseId String?
   occurredAt   DateTime
   type         FinancialEntryType
   category     FinancialCategory
@@ -452,10 +461,37 @@ model FinancialEntry {
   source       FinancialSource
   createdAt    DateTime          @default(now())
 
-  hotel       Hotel        @relation(fields: [hotelId], references: [id])
-  reservation Reservation? @relation(fields: [reservationId], references: [id])
+  hotel       Hotel             @relation(fields: [hotelId], references: [id])
+  reservation Reservation?      @relation(fields: [reservationId], references: [id])
+  recurringExpense RecurringExpense? @relation(fields: [recurringExpenseId], references: [id])
 
   @@index([hotelId, occurredAt])
+  @@index([recurringExpenseId])
+}
+
+model RecurringExpense {
+  id          String              @id @default(cuid())
+  hotelId     String
+  name        String
+  provider    ExpenseProvider
+  description String?
+  amount      Decimal
+  currency    String             @default("BRL")
+  category    FinancialCategory  @default(OTHER)
+  profitCenter ProfitCenter      @default(OTHER)
+  seasonType  SeasonType?
+  frequency   RecurrenceFrequency @default(MONTHLY)
+  interval    Int                @default(1)
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  active      Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  hotel    Hotel            @relation(fields: [hotelId], references: [id])
+  entries  FinancialEntry[]
+
+  @@index([hotelId, nextRunAt])
 }
 
 model ExpenseInvoice {
