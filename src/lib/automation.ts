@@ -92,8 +92,19 @@ export async function ingestExpenseInvoiceFromEmail(emailText: string) {
       dueDate: parsed.dueDate ?? undefined,
       billingPeriodStart: parsed.billingPeriodStart ?? undefined,
       billingPeriodEnd: parsed.billingPeriodEnd ?? undefined,
-      status: InvoiceStatus.RECEIVED,
+      status: InvoiceStatus.PENDING,
       notes: "Auto-ingest via email",
     },
+  }).then(async (invoice) => {
+    await prisma.expenseInvoiceAudit.create({
+      data: {
+        invoiceId: invoice.id,
+        action: "INGESTED",
+        toStatus: invoice.status,
+        note: "Fatura ingerida automaticamente.",
+        actor: "system",
+      },
+    });
+    return invoice;
   });
 }

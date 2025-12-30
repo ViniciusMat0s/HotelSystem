@@ -126,8 +126,8 @@ enum ExpenseProvider {
 }
 
 enum InvoiceStatus {
-  RECEIVED
-  PROCESSING
+  PENDING
+  APPROVED
   PAID
   CANCELED
 }
@@ -445,6 +445,7 @@ model FinancialEntry {
   id           String            @id @default(cuid())
   hotelId      String
   reservationId String?
+  expenseInvoiceId String?
   recurringExpenseId String?
   occurredAt   DateTime
   type         FinancialEntryType
@@ -461,11 +462,13 @@ model FinancialEntry {
   source       FinancialSource
   createdAt    DateTime          @default(now())
 
-  hotel       Hotel             @relation(fields: [hotelId], references: [id])
-  reservation Reservation?      @relation(fields: [reservationId], references: [id])
+  hotel       Hotel                @relation(fields: [hotelId], references: [id])
+  reservation Reservation?         @relation(fields: [reservationId], references: [id])
+  expenseInvoice ExpenseInvoice?   @relation(fields: [expenseInvoiceId], references: [id])
   recurringExpense RecurringExpense? @relation(fields: [recurringExpenseId], references: [id])
 
   @@index([hotelId, occurredAt])
+  @@index([expenseInvoiceId])
   @@index([recurringExpenseId])
 }
 
@@ -505,11 +508,30 @@ model ExpenseInvoice {
   billingPeriodEnd   DateTime?
   dueDate            DateTime?
   receivedAt         DateTime      @default(now())
+  approvedAt         DateTime?
+  paidAt             DateTime?
   emailMessageId     String?
-  status             InvoiceStatus @default(RECEIVED)
+  status             InvoiceStatus @default(PENDING)
   notes              String?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
+  financialEntries FinancialEntry[]
+  audits ExpenseInvoiceAudit[]
+}
+
+model ExpenseInvoiceAudit {
+  id         String        @id @default(cuid())
+  invoiceId  String
+  action     String
+  fromStatus InvoiceStatus?
+  toStatus   InvoiceStatus?
+  note       String?
+  actor      String        @default("system")
+  createdAt  DateTime      @default(now())
+
+  invoice ExpenseInvoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId, createdAt])
 }
 
 model Lead {

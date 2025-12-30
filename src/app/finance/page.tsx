@@ -1,4 +1,5 @@
 import { Panel } from "@/components/cards";
+import { ExpenseInvoicesManager } from "@/components/expense-invoices-manager";
 import { FinancialEntriesManager } from "@/components/financial-entries-manager";
 import { ExpenseIngestForm } from "@/components/expense-ingest-form";
 import { RecurringExpensesManager } from "@/components/recurring-expenses-manager";
@@ -35,19 +36,6 @@ const ROOM_CATEGORY_LABELS: Record<string, string> = {
 const PACKAGE_LABELS: Record<string, string> = {
   PADRAO: "Padrao",
   OUTROS: "Outros",
-};
-
-const PROVIDER_LABELS: Record<string, string> = {
-  WATER: "Agua",
-  POWER: "Energia",
-  INTERNET: "Internet",
-  TV: "TV",
-  OTHER: "Outros",
-};
-
-const formatDate = (value?: Date | null) => {
-  if (!value) return "--";
-  return value.toLocaleDateString("pt-BR");
 };
 
 export default async function FinancePage() {
@@ -109,7 +97,44 @@ export default async function FinancePage() {
     where: { hotelId: hotel.id },
     orderBy: { receivedAt: "desc" },
     take: 6,
+    include: {
+      financialEntries: { select: { id: true } },
+      audits: {
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      },
+    },
   });
+
+  const invoiceItems = invoices.map((invoice) => ({
+    id: invoice.id,
+    provider: invoice.provider,
+    invoiceNumber: invoice.invoiceNumber ?? null,
+    amount: invoice.amount.toString(),
+    currency: invoice.currency,
+    billingPeriodStart: invoice.billingPeriodStart
+      ? invoice.billingPeriodStart.toISOString()
+      : null,
+    billingPeriodEnd: invoice.billingPeriodEnd
+      ? invoice.billingPeriodEnd.toISOString()
+      : null,
+    dueDate: invoice.dueDate ? invoice.dueDate.toISOString() : null,
+    receivedAt: invoice.receivedAt.toISOString(),
+    approvedAt: invoice.approvedAt ? invoice.approvedAt.toISOString() : null,
+    paidAt: invoice.paidAt ? invoice.paidAt.toISOString() : null,
+    status: invoice.status,
+    notes: invoice.notes ?? null,
+    hasEntry: invoice.financialEntries.length > 0,
+    audits: invoice.audits.map((audit) => ({
+      id: audit.id,
+      action: audit.action,
+      fromStatus: audit.fromStatus ?? null,
+      toStatus: audit.toStatus ?? null,
+      note: audit.note ?? null,
+      actor: audit.actor ?? null,
+      createdAt: audit.createdAt.toISOString(),
+    })),
+  }));
 
   return (
     <div className="space-y-8">
@@ -239,45 +264,7 @@ export default async function FinancePage() {
         >
           <div className="space-y-6">
             <ExpenseIngestForm />
-            {invoices.length === 0 ? (
-              <p className="text-sm text-muted">
-                Nenhuma fatura ingerida. Conecte o email financeiro.
-              </p>
-            ) : (
-              <div className="space-y-3 text-sm">
-                {invoices.map((invoice) => {
-                  const periodLabel =
-                    invoice.billingPeriodStart && invoice.billingPeriodEnd
-                      ? `${formatDate(invoice.billingPeriodStart)} - ${formatDate(
-                          invoice.billingPeriodEnd
-                        )}`
-                      : null;
-                  return (
-                    <div
-                      key={invoice.id}
-                      className="flex flex-wrap items-center justify-between gap-3 card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
-                    >
-                      <div>
-                        <p className="font-display text-base text-foreground">
-                          {PROVIDER_LABELS[invoice.provider] ?? invoice.provider}
-                        </p>
-                        <p className="text-xs text-muted">
-                          {invoice.invoiceNumber
-                            ? `Fatura ${invoice.invoiceNumber}`
-                            : "Fatura sem numero"}
-                          {" • "}
-                          Vencimento: {formatDate(invoice.dueDate)}
-                          {periodLabel ? ` • Periodo: ${periodLabel}` : ""}
-                        </p>
-                      </div>
-                      <span className="font-display text-lg">
-                        {formatCurrency(Number(invoice.amount))}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <ExpenseInvoicesManager invoices={invoiceItems} />
           </div>
         </Panel>
       </section>
