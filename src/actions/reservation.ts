@@ -4,6 +4,10 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import {
   PaymentStatus,
+  FinancialCategory,
+  FinancialEntryType,
+  FinancialSource,
+  ProfitCenter,
   Prisma,
   ReservationSource,
   ReservationStatus,
@@ -68,6 +72,66 @@ const parseDate = (value?: string) => {
   if (!value) return null;
   const parsed = new Date(`${value}T12:00:00`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const upsertReservationRevenueEntry = async ({
+  hotelId,
+  reservationId,
+  amount,
+  roomCategory,
+  packageType,
+  seasonType,
+  occurredAt,
+}: {
+  hotelId: string;
+  reservationId: string;
+  amount: number | null;
+  roomCategory: RoomCategory;
+  packageType?: string;
+  seasonType?: SeasonType | null;
+  occurredAt: Date;
+}) => {
+  if (!amount || amount <= 0) return;
+
+  const profitCenter = packageType ? ProfitCenter.PACKAGE : ProfitCenter.ROOM;
+  const category = packageType ? FinancialCategory.PACKAGE : FinancialCategory.ROOM;
+
+  const existing = await prisma.financialEntry.findFirst({
+    where: {
+      hotelId,
+      reservationId,
+      type: FinancialEntryType.REVENUE,
+    },
+  });
+
+  const data = {
+    occurredAt,
+    type: FinancialEntryType.REVENUE,
+    category,
+    profitCenter,
+    roomCategory,
+    packageType: packageType ?? undefined,
+    grossAmount: new Prisma.Decimal(amount),
+    netAmount: new Prisma.Decimal(amount),
+    source: FinancialSource.RESERVATION,
+    seasonType: seasonType ?? undefined,
+  };
+
+  if (existing) {
+    await prisma.financialEntry.update({
+      where: { id: existing.id },
+      data,
+    });
+    return;
+  }
+
+  await prisma.financialEntry.create({
+    data: {
+      hotelId,
+      reservationId,
+      ...data,
+    },
+  });
 };
 
 const ReservationUpdateSchema = z.object({
@@ -165,6 +229,7 @@ export async function createReservationAction(
   const source = payload.data.source ?? ReservationSource.DIRECT;
   const totalAmount = parseNumber(payload.data.totalAmount ?? undefined);
   const roomId = payload.data.roomId;
+  const paidAt = paymentStatus === PaymentStatus.PAID ? new Date() : undefined;
 
   let roomCategory = payload.data.roomCategory ?? RoomCategory.STANDARD;
   if (roomId) {
@@ -174,7 +239,10 @@ export async function createReservationAction(
     if (!room) {
       return { status: "error", message: "Quarto invalido." };
     }
-    if ([RoomStatus.MAINTENANCE, RoomStatus.OUT_OF_SERVICE].includes(room.status)) {
+    if (
+      room.status === RoomStatus.MAINTENANCE ||
+      room.status === RoomStatus.OUT_OF_SERVICE
+    ) {
       return { status: "error", message: "Quarto indisponivel no momento." };
     }
     const conflicts = await prisma.reservation.count({
@@ -220,6 +288,7 @@ export async function createReservationAction(
       currency: "BRL",
       seasonType: payload.data.seasonType,
       notes: payload.data.notes,
+      paidAt,
     },
   });
 
@@ -237,7 +306,9 @@ export async function createReservationAction(
     const nextRoomStatus =
       status === ReservationStatus.CHECKED_IN
         ? RoomStatus.OCCUPIED
-        : [ReservationStatus.CHECKED_OUT, ReservationStatus.CANCELED, ReservationStatus.NO_SHOW].includes(status)
+        : status === ReservationStatus.CHECKED_OUT ||
+          status === ReservationStatus.CANCELED ||
+          status === ReservationStatus.NO_SHOW
         ? RoomStatus.AVAILABLE
         : null;
 
@@ -247,6 +318,18 @@ export async function createReservationAction(
         data: { status: nextRoomStatus },
       });
     }
+  }
+
+  if (paymentStatus === PaymentStatus.PAID) {
+    await upsertReservationRevenueEntry({
+      hotelId: hotel.id,
+      reservationId: reservation.id,
+      amount: totalAmount,
+      roomCategory,
+      packageType: payload.data.packageType,
+      seasonType: payload.data.seasonType ?? undefined,
+      occurredAt: paidAt ?? new Date(),
+    });
   }
 
   let message = "Reserva criada com sucesso.";
@@ -269,6 +352,7 @@ export async function createReservationAction(
   revalidatePath("/");
   revalidatePath("/rooms");
   revalidatePath("/reservations");
+  revalidatePath("/finance");
 
   return {
     status: "ok",
@@ -331,6 +415,11 @@ export async function updateReservationAction(
   const nextStatus = payload.data.status ?? reservation.status;
   const nextPayment = payload.data.paymentStatus ?? reservation.paymentStatus;
   let nextRoomCategory = payload.data.roomCategory ?? reservation.roomCategory;
+  const paidAt =
+    nextPayment === PaymentStatus.PAID &&
+    reservation.paymentStatus !== PaymentStatus.PAID
+      ? new Date()
+      : reservation.paidAt;
 
   if (nextRoomId) {
     const room = await prisma.room.findFirst({
@@ -339,7 +428,10 @@ export async function updateReservationAction(
     if (!room) {
       return { status: "error", message: "Quarto invalido." };
     }
-    if ([RoomStatus.MAINTENANCE, RoomStatus.OUT_OF_SERVICE].includes(room.status)) {
+    if (
+      room.status === RoomStatus.MAINTENANCE ||
+      room.status === RoomStatus.OUT_OF_SERVICE
+    ) {
       return { status: "error", message: "Quarto indisponivel no momento." };
     }
     nextRoomCategory = room.category;
@@ -378,10 +470,7 @@ export async function updateReservationAction(
         totalAmount !== null ? new Prisma.Decimal(totalAmount) : undefined,
       seasonType: payload.data.seasonType ?? reservation.seasonType,
       notes: payload.data.notes ?? reservation.notes,
-      paidAt:
-        nextPayment === PaymentStatus.PAID && reservation.paymentStatus !== PaymentStatus.PAID
-          ? new Date()
-          : reservation.paidAt,
+      paidAt,
     },
   });
 
@@ -426,7 +515,9 @@ export async function updateReservationAction(
     const nextRoomStatus =
       nextStatus === ReservationStatus.CHECKED_IN
         ? RoomStatus.OCCUPIED
-        : [ReservationStatus.CHECKED_OUT, ReservationStatus.CANCELED, ReservationStatus.NO_SHOW].includes(nextStatus)
+        : nextStatus === ReservationStatus.CHECKED_OUT ||
+          nextStatus === ReservationStatus.CANCELED ||
+          nextStatus === ReservationStatus.NO_SHOW
         ? RoomStatus.AVAILABLE
         : null;
     if (nextRoomStatus) {
@@ -441,6 +532,16 @@ export async function updateReservationAction(
     nextPayment === PaymentStatus.PAID &&
     reservation.paymentStatus !== PaymentStatus.PAID
   ) {
+    await upsertReservationRevenueEntry({
+      hotelId: hotel.id,
+      reservationId: reservation.id,
+      amount: totalAmount ?? Number(reservation.totalAmount ?? 0),
+      roomCategory: nextRoomCategory,
+      packageType: payload.data.packageType ?? reservation.packageType ?? undefined,
+      seasonType: payload.data.seasonType ?? reservation.seasonType ?? undefined,
+      occurredAt: paidAt ?? new Date(),
+    });
+
     try {
       const existingConfirmation = await prisma.notification.findFirst({
         where: {
@@ -471,6 +572,7 @@ export async function updateReservationAction(
 
   revalidatePath("/rooms");
   revalidatePath("/reservations");
+  revalidatePath("/finance");
 
   return {
     status: "ok",

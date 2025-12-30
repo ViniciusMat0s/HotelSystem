@@ -28,12 +28,24 @@ const ReservationUpdateSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
-type RouteContext = { params: { reservationId: string } };
+type RouteContext = { params?: Promise<{ reservationId?: string }> };
+
+const getReservationId = async (context: RouteContext) => {
+  const params = await context.params;
+  return typeof params?.reservationId === "string" ? params.reservationId : null;
+};
 
 export async function GET(_request: Request, context: RouteContext) {
+  const reservationId = await getReservationId(context);
+  if (!reservationId) {
+    return NextResponse.json(
+      { ok: false, message: "Invalid reservationId." },
+      { status: 400 }
+    );
+  }
   const hotel = await ensureDefaultHotel();
   const reservation = await prisma.reservation.findFirst({
-    where: { id: context.params.reservationId, hotelId: hotel.id },
+    where: { id: reservationId, hotelId: hotel.id },
     include: { guest: true, room: true },
   });
 
@@ -48,6 +60,13 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const reservationId = await getReservationId(context);
+  if (!reservationId) {
+    return NextResponse.json(
+      { ok: false, message: "Invalid reservationId." },
+      { status: 400 }
+    );
+  }
   const body = await request.json().catch(() => null);
   const parsed = ReservationUpdateSchema.safeParse(body);
   if (!parsed.success) {
@@ -68,7 +87,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const updated = await prisma.reservation.updateMany({
-    where: { id: context.params.reservationId, hotelId: hotel.id },
+    where: { id: reservationId, hotelId: hotel.id },
     data: {
       roomId: data.roomId ?? undefined,
       status: data.status,
@@ -101,9 +120,16 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  const reservationId = await getReservationId(context);
+  if (!reservationId) {
+    return NextResponse.json(
+      { ok: false, message: "Invalid reservationId." },
+      { status: 400 }
+    );
+  }
   const hotel = await ensureDefaultHotel();
   const result = await prisma.reservation.deleteMany({
-    where: { id: context.params.reservationId, hotelId: hotel.id },
+    where: { id: reservationId, hotelId: hotel.id },
   });
 
   if (result.count === 0) {

@@ -15,12 +15,21 @@ const GuestUpdateSchema = z.object({
   difficultyScore: z.coerce.number().int().min(0).max(10).optional(),
 });
 
-type RouteContext = { params: { guestId: string } };
+type RouteContext = { params?: Promise<{ guestId?: string }> };
+
+const getGuestId = async (context: RouteContext) => {
+  const params = await context.params;
+  return typeof params?.guestId === "string" ? params.guestId : null;
+};
 
 export async function GET(_request: Request, context: RouteContext) {
+  const guestId = await getGuestId(context);
+  if (!guestId) {
+    return NextResponse.json({ ok: false, message: "Invalid guestId." }, { status: 400 });
+  }
   const hotel = await ensureDefaultHotel();
   const guest = await prisma.guest.findFirst({
-    where: { id: context.params.guestId, hotelId: hotel.id },
+    where: { id: guestId, hotelId: hotel.id },
   });
 
   if (!guest) {
@@ -31,6 +40,10 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const guestId = await getGuestId(context);
+  if (!guestId) {
+    return NextResponse.json({ ok: false, message: "Invalid guestId." }, { status: 400 });
+  }
   const body = await request.json().catch(() => null);
   const parsed = GuestUpdateSchema.safeParse(body);
   if (!parsed.success) {
@@ -44,7 +57,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const data = parsed.data;
 
   const updated = await prisma.guest.updateMany({
-    where: { id: context.params.guestId, hotelId: hotel.id },
+    where: { id: guestId, hotelId: hotel.id },
     data: {
       firstName: data.firstName,
       lastName: data.lastName,
@@ -66,9 +79,13 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  const guestId = await getGuestId(context);
+  if (!guestId) {
+    return NextResponse.json({ ok: false, message: "Invalid guestId." }, { status: 400 });
+  }
   const hotel = await ensureDefaultHotel();
   const result = await prisma.guest.deleteMany({
-    where: { id: context.params.guestId, hotelId: hotel.id },
+    where: { id: guestId, hotelId: hotel.id },
   });
 
   if (result.count === 0) {

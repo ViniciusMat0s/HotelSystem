@@ -29,12 +29,24 @@ const FinancialUpdateSchema = z.object({
   source: z.nativeEnum(FinancialSource).optional(),
 });
 
-type RouteContext = { params: { entryId: string } };
+type RouteContext = { params?: Promise<{ entryId?: string }> };
+
+const getEntryId = async (context: RouteContext) => {
+  const params = await context.params;
+  return typeof params?.entryId === "string" ? params.entryId : null;
+};
 
 export async function GET(_request: Request, context: RouteContext) {
+  const entryId = await getEntryId(context);
+  if (!entryId) {
+    return NextResponse.json(
+      { ok: false, message: "Invalid entryId." },
+      { status: 400 }
+    );
+  }
   const hotel = await ensureDefaultHotel();
   const entry = await prisma.financialEntry.findFirst({
-    where: { id: context.params.entryId, hotelId: hotel.id },
+    where: { id: entryId, hotelId: hotel.id },
   });
 
   if (!entry) {
@@ -48,6 +60,13 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const entryId = await getEntryId(context);
+  if (!entryId) {
+    return NextResponse.json(
+      { ok: false, message: "Invalid entryId." },
+      { status: 400 }
+    );
+  }
   const body = await request.json().catch(() => null);
   const parsed = FinancialUpdateSchema.safeParse(body);
   if (!parsed.success) {
@@ -61,7 +80,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const data = parsed.data;
 
   const updated = await prisma.financialEntry.updateMany({
-    where: { id: context.params.entryId, hotelId: hotel.id },
+    where: { id: entryId, hotelId: hotel.id },
     data: {
       reservationId: data.reservationId ?? undefined,
       occurredAt: data.occurredAt,
@@ -100,9 +119,16 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  const entryId = await getEntryId(context);
+  if (!entryId) {
+    return NextResponse.json(
+      { ok: false, message: "Invalid entryId." },
+      { status: 400 }
+    );
+  }
   const hotel = await ensureDefaultHotel();
   const result = await prisma.financialEntry.deleteMany({
-    where: { id: context.params.entryId, hotelId: hotel.id },
+    where: { id: entryId, hotelId: hotel.id },
   });
 
   if (result.count === 0) {

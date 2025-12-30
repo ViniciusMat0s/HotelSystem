@@ -39,8 +39,10 @@ export async function getMaintenanceSummary(hotelId?: string) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 6);
 
-  const openIssues = issues.filter((issue) =>
-    [RoomIssueStatus.OPEN, RoomIssueStatus.IN_PROGRESS].includes(issue.status)
+  const openIssues = issues.filter(
+    (issue) =>
+      issue.status === RoomIssueStatus.OPEN ||
+      issue.status === RoomIssueStatus.IN_PROGRESS
   );
 
   const vendors = await prisma.maintenanceVendor.findMany({

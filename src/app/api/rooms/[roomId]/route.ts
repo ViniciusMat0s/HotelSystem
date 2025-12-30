@@ -16,12 +16,21 @@ const RoomUpdateSchema = z.object({
   notes: z.string().optional(),
 });
 
-type RouteContext = { params: { roomId: string } };
+type RouteContext = { params?: Promise<{ roomId?: string }> };
+
+const getRoomId = async (context: RouteContext) => {
+  const params = await context.params;
+  return typeof params?.roomId === "string" ? params.roomId : null;
+};
 
 export async function GET(_request: Request, context: RouteContext) {
+  const roomId = await getRoomId(context);
+  if (!roomId) {
+    return NextResponse.json({ ok: false, message: "Invalid roomId." }, { status: 400 });
+  }
   const hotel = await ensureDefaultHotel();
   const room = await prisma.room.findFirst({
-    where: { id: context.params.roomId, hotelId: hotel.id },
+    where: { id: roomId, hotelId: hotel.id },
   });
 
   if (!room) {
@@ -32,6 +41,10 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const roomId = await getRoomId(context);
+  if (!roomId) {
+    return NextResponse.json({ ok: false, message: "Invalid roomId." }, { status: 400 });
+  }
   const body = await request.json().catch(() => null);
   const parsed = RoomUpdateSchema.safeParse(body);
   if (!parsed.success) {
@@ -45,7 +58,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const data = parsed.data;
 
   const room = await prisma.room.updateMany({
-    where: { id: context.params.roomId, hotelId: hotel.id },
+    where: { id: roomId, hotelId: hotel.id },
     data: {
       number: data.number,
       name: data.name,
@@ -70,9 +83,13 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  const roomId = await getRoomId(context);
+  if (!roomId) {
+    return NextResponse.json({ ok: false, message: "Invalid roomId." }, { status: 400 });
+  }
   const hotel = await ensureDefaultHotel();
   const result = await prisma.room.deleteMany({
-    where: { id: context.params.roomId, hotelId: hotel.id },
+    where: { id: roomId, hotelId: hotel.id },
   });
 
   if (result.count === 0) {

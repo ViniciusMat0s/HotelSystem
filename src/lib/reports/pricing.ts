@@ -6,7 +6,10 @@ const toNumber = (value: unknown) =>
   typeof value === "number" ? value : Number(value ?? 0);
 
 export async function getDynamicPricingSuggestion(hotelId?: string) {
-  const hotel = hotelId ? { id: hotelId } : await ensureDefaultHotel();
+  const hotel =
+    (hotelId
+      ? await prisma.hotel.findUnique({ where: { id: hotelId } })
+      : null) ?? (await ensureDefaultHotel());
   const occupancy = await getOccupancyReport(hotel.id);
 
   const competitors = await prisma.competitorHotel.findMany({
