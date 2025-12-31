@@ -17,6 +17,11 @@ import {
   NotificationType,
 } from "@/generated/prisma";
 import { issueDigitalKey } from "@/lib/access";
+import {
+  getCategoryAvailability,
+  shouldEnforceAvailability,
+  validateRoomAvailability,
+} from "@/lib/availability";
 import { ensureDefaultHotel } from "@/lib/hotel";
 import { prisma } from "@/lib/prisma";
 import { queueConfirmation } from "@/lib/notifications";
@@ -230,39 +235,53 @@ export async function createReservationAction(
   const totalAmount = parseNumber(payload.data.totalAmount ?? undefined);
   const roomId = payload.data.roomId;
   const paidAt = paymentStatus === PaymentStatus.PAID ? new Date() : undefined;
+  const enforceAvailability = shouldEnforceAvailability(status);
 
   let roomCategory = payload.data.roomCategory ?? RoomCategory.STANDARD;
   if (roomId) {
-    const room = await prisma.room.findFirst({
-      where: { id: roomId, hotelId: hotel.id },
+    const roomCheck = await validateRoomAvailability({
+      hotelId: hotel.id,
+      roomId,
+      checkIn,
+      checkOut,
+      enforceAvailability,
     });
-    if (!room) {
-      return { status: "error", message: "Quarto invalido." };
+    if (!roomCheck.ok) {
+      return { status: "error", message: roomCheck.message };
     }
-    if (
-      room.status === RoomStatus.MAINTENANCE ||
-      room.status === RoomStatus.OUT_OF_SERVICE
-    ) {
-      return { status: "error", message: "Quarto indisponivel no momento." };
-    }
-    const conflicts = await prisma.reservation.count({
-      where: {
-        hotelId: hotel.id,
-        roomId,
-        status: {
-          in: [
-            ReservationStatus.BOOKED,
-            ReservationStatus.CHECKED_IN,
-          ],
-        },
-        checkIn: { lt: checkOut },
-        checkOut: { gt: checkIn },
-      },
+    roomCategory = roomCheck.roomCategory ?? roomCategory;
+  }
+
+  if (
+    (status === ReservationStatus.CHECKED_IN ||
+      status === ReservationStatus.CHECKED_OUT) &&
+    !roomId
+  ) {
+    return {
+      status: "error",
+      message: "Selecione um quarto para check-in ou check-out.",
+    };
+  }
+
+  if (!roomId && enforceAvailability) {
+    const availability = await getCategoryAvailability({
+      hotelId: hotel.id,
+      roomCategory,
+      checkIn,
+      checkOut,
     });
-    if (conflicts > 0) {
-      return { status: "error", message: "Quarto ja reservado para o periodo." };
+    if (availability.totalRooms === 0) {
+      return {
+        status: "error",
+        message: "Nao existem quartos ativos nessa categoria.",
+      };
     }
-    roomCategory = room.category;
+    if (availability.availableRooms <= 0) {
+      return {
+        status: "error",
+        message: "Sem disponibilidade para a categoria no periodo.",
+      };
+    }
   }
 
   if (!guestId) {
@@ -415,6 +434,7 @@ export async function updateReservationAction(
   const nextStatus = payload.data.status ?? reservation.status;
   const nextPayment = payload.data.paymentStatus ?? reservation.paymentStatus;
   let nextRoomCategory = payload.data.roomCategory ?? reservation.roomCategory;
+  const enforceAvailability = shouldEnforceAvailability(nextStatus);
   const paidAt =
     nextPayment === PaymentStatus.PAID &&
     reservation.paymentStatus !== PaymentStatus.PAID
@@ -422,33 +442,47 @@ export async function updateReservationAction(
       : reservation.paidAt;
 
   if (nextRoomId) {
-    const room = await prisma.room.findFirst({
-      where: { id: nextRoomId, hotelId: hotel.id },
+    const roomCheck = await validateRoomAvailability({
+      hotelId: hotel.id,
+      roomId: nextRoomId,
+      checkIn,
+      checkOut,
+      excludeReservationId: reservation.id,
+      enforceAvailability,
     });
-    if (!room) {
-      return { status: "error", message: "Quarto invalido." };
+    if (!roomCheck.ok) {
+      return { status: "error", message: roomCheck.message };
     }
-    if (
-      room.status === RoomStatus.MAINTENANCE ||
-      room.status === RoomStatus.OUT_OF_SERVICE
-    ) {
-      return { status: "error", message: "Quarto indisponivel no momento." };
-    }
-    nextRoomCategory = room.category;
-    const conflicts = await prisma.reservation.count({
-      where: {
-        id: { not: reservation.id },
-        hotelId: hotel.id,
-        roomId: nextRoomId,
-        status: {
-          in: [ReservationStatus.BOOKED, ReservationStatus.CHECKED_IN],
-        },
-        checkIn: { lt: checkOut },
-        checkOut: { gt: checkIn },
-      },
+    nextRoomCategory = roomCheck.roomCategory ?? nextRoomCategory;
+  }
+
+  if (
+    (nextStatus === ReservationStatus.CHECKED_IN ||
+      nextStatus === ReservationStatus.CHECKED_OUT) &&
+    !nextRoomId
+  ) {
+    return {
+      status: "error",
+      message: "Selecione um quarto para check-in ou check-out.",
+    };
+  }
+
+  if (!nextRoomId && enforceAvailability) {
+    const availability = await getCategoryAvailability({
+      hotelId: hotel.id,
+      roomCategory: nextRoomCategory,
+      checkIn,
+      checkOut,
+      excludeReservationId: reservation.id,
     });
-    if (conflicts > 0) {
-      return { status: "error", message: "Quarto ja reservado no periodo." };
+    if (availability.totalRooms === 0) {
+      return {
+        status: "error",
+        message: "Nao existem quartos ativos nessa categoria.",
+      };
+    }
+    if (availability.availableRooms <= 0) {
+      return { status: "error", message: "Sem disponibilidade no periodo." };
     }
   }
 

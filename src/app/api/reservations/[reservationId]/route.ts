@@ -8,6 +8,11 @@ import {
   RoomCategory,
   SeasonType,
 } from "@/generated/prisma";
+import {
+  getCategoryAvailability,
+  shouldEnforceAvailability,
+  validateRoomAvailability,
+} from "@/lib/availability";
 import { ensureDefaultHotel } from "@/lib/hotel";
 import { prisma } from "@/lib/prisma";
 
@@ -79,42 +84,109 @@ export async function PATCH(request: Request, context: RouteContext) {
   const hotel = await ensureDefaultHotel();
   const data = parsed.data;
 
-  if (data.checkIn && data.checkOut && data.checkOut <= data.checkIn) {
+  const reservation = await prisma.reservation.findFirst({
+    where: { id: reservationId, hotelId: hotel.id },
+  });
+
+  if (!reservation) {
+    return NextResponse.json(
+      { ok: false, message: "Reservation not found." },
+      { status: 404 }
+    );
+  }
+
+  const nextCheckIn = data.checkIn ?? reservation.checkIn;
+  const nextCheckOut = data.checkOut ?? reservation.checkOut;
+
+  if (nextCheckOut <= nextCheckIn) {
     return NextResponse.json(
       { ok: false, message: "checkOut precisa ser maior que checkIn." },
       { status: 400 }
     );
   }
 
-  const updated = await prisma.reservation.updateMany({
-    where: { id: reservationId, hotelId: hotel.id },
+  const nextRoomId =
+    data.roomId === null ? null : data.roomId ?? reservation.roomId;
+  const nextStatus = data.status ?? reservation.status;
+  const nextSource = data.source ?? reservation.source;
+  const nextPaymentStatus = data.paymentStatus ?? reservation.paymentStatus;
+  const nextRoomCategory = data.roomCategory ?? reservation.roomCategory;
+  const enforceAvailability = shouldEnforceAvailability(nextStatus);
+
+  if (
+    (nextStatus === ReservationStatus.CHECKED_IN ||
+      nextStatus === ReservationStatus.CHECKED_OUT) &&
+    !nextRoomId
+  ) {
+    return NextResponse.json(
+      { ok: false, message: "Selecione um quarto para check-in ou check-out." },
+      { status: 400 }
+    );
+  }
+
+  let resolvedRoomCategory = nextRoomCategory;
+  if (nextRoomId) {
+    const roomCheck = await validateRoomAvailability({
+      hotelId: hotel.id,
+      roomId: nextRoomId,
+      checkIn: nextCheckIn,
+      checkOut: nextCheckOut,
+      excludeReservationId: reservation.id,
+      enforceAvailability,
+    });
+    if (!roomCheck.ok) {
+      return NextResponse.json(
+        { ok: false, message: roomCheck.message },
+        { status: 409 }
+      );
+    }
+    resolvedRoomCategory = roomCheck.roomCategory ?? resolvedRoomCategory;
+  }
+
+  if (!nextRoomId && enforceAvailability) {
+    const availability = await getCategoryAvailability({
+      hotelId: hotel.id,
+      roomCategory: resolvedRoomCategory,
+      checkIn: nextCheckIn,
+      checkOut: nextCheckOut,
+      excludeReservationId: reservation.id,
+    });
+    if (availability.totalRooms === 0) {
+      return NextResponse.json(
+        { ok: false, message: "Nao existem quartos ativos nessa categoria." },
+        { status: 409 }
+      );
+    }
+    if (availability.availableRooms <= 0) {
+      return NextResponse.json(
+        { ok: false, message: "Sem disponibilidade para a categoria no periodo." },
+        { status: 409 }
+      );
+    }
+  }
+
+  await prisma.reservation.update({
+    where: { id: reservation.id },
     data: {
-      roomId: data.roomId ?? undefined,
-      status: data.status,
-      source: data.source,
-      paymentStatus: data.paymentStatus,
-      packageType: data.packageType ?? undefined,
-      roomCategory: data.roomCategory,
-      checkIn: data.checkIn,
-      checkOut: data.checkOut,
-      adults: data.adults,
-      children: data.children,
+      roomId: nextRoomId,
+      status: nextStatus,
+      source: nextSource,
+      paymentStatus: nextPaymentStatus,
+      packageType: data.packageType ?? reservation.packageType,
+      roomCategory: resolvedRoomCategory,
+      checkIn: nextCheckIn,
+      checkOut: nextCheckOut,
+      adults: data.adults ?? reservation.adults,
+      children: data.children ?? reservation.children,
       totalAmount:
         data.totalAmount !== undefined
           ? new Prisma.Decimal(data.totalAmount)
-          : undefined,
-      currency: data.currency,
-      seasonType: data.seasonType,
-      notes: data.notes ?? undefined,
+          : reservation.totalAmount ?? undefined,
+      currency: data.currency ?? reservation.currency,
+      seasonType: data.seasonType ?? reservation.seasonType,
+      notes: data.notes ?? reservation.notes ?? undefined,
     },
   });
-
-  if (updated.count === 0) {
-    return NextResponse.json(
-      { ok: false, message: "Reservation not found." },
-      { status: 404 }
-    );
-  }
 
   return NextResponse.json({ ok: true });
 }

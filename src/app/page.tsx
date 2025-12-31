@@ -1,5 +1,6 @@
 import { Panel, Pill, StatCard } from "@/components/cards";
 import { MonthlyReservationsChart } from "@/components/monthly-reservations-chart";
+import { ReservationsChannelPanel } from "@/components/reservations-channel-panel";
 import { getDashboardSnapshot } from "@/lib/dashboard";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
@@ -96,12 +97,18 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <Panel
-        title="Reservas por mes"
-        description="Volume mensal das reservas nao canceladas."
-      >
-        <MonthlyReservationsChart items={snapshot.reservationsByMonth} />
-      </Panel>
+      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <Panel
+          title="Reservas por mes"
+          description="Volume mensal das reservas nao canceladas."
+        >
+          <MonthlyReservationsChart items={snapshot.reservationsByMonth} />
+        </Panel>
+        <ReservationsChannelPanel
+          sources={snapshot.reservationsBySource}
+          cancelRateByMonth={snapshot.cancelRateByMonth}
+        />
+      </section>
 
       <section className="grid gap-6 lg:grid-cols-3">
         <Panel

@@ -8,6 +8,11 @@ import {
   RoomCategory,
   SeasonType,
 } from "@/generated/prisma";
+import {
+  getCategoryAvailability,
+  shouldEnforceAvailability,
+  validateRoomAvailability,
+} from "@/lib/availability";
 import { ensureDefaultHotel } from "@/lib/hotel";
 import { prisma } from "@/lib/prisma";
 
@@ -58,17 +63,69 @@ export async function POST(request: Request) {
   }
 
   const hotel = await ensureDefaultHotel();
+  const status = payload.status ?? ReservationStatus.BOOKED;
+  let roomCategory = payload.roomCategory ?? RoomCategory.STANDARD;
+  const enforceAvailability = shouldEnforceAvailability(status);
+
+  if (
+    (status === ReservationStatus.CHECKED_IN ||
+      status === ReservationStatus.CHECKED_OUT) &&
+    !payload.roomId
+  ) {
+    return NextResponse.json(
+      { ok: false, message: "Selecione um quarto para check-in ou check-out." },
+      { status: 400 }
+    );
+  }
+
+  if (payload.roomId) {
+    const roomCheck = await validateRoomAvailability({
+      hotelId: hotel.id,
+      roomId: payload.roomId,
+      checkIn: payload.checkIn,
+      checkOut: payload.checkOut,
+      enforceAvailability,
+    });
+    if (!roomCheck.ok) {
+      return NextResponse.json(
+        { ok: false, message: roomCheck.message },
+        { status: 409 }
+      );
+    }
+    roomCategory = roomCheck.roomCategory ?? roomCategory;
+  }
+
+  if (!payload.roomId && enforceAvailability) {
+    const availability = await getCategoryAvailability({
+      hotelId: hotel.id,
+      roomCategory,
+      checkIn: payload.checkIn,
+      checkOut: payload.checkOut,
+    });
+    if (availability.totalRooms === 0) {
+      return NextResponse.json(
+        { ok: false, message: "Nao existem quartos ativos nessa categoria." },
+        { status: 409 }
+      );
+    }
+    if (availability.availableRooms <= 0) {
+      return NextResponse.json(
+        { ok: false, message: "Sem disponibilidade para a categoria no periodo." },
+        { status: 409 }
+      );
+    }
+  }
 
   const reservation = await prisma.reservation.create({
     data: {
       hotelId: hotel.id,
       guestId: payload.guestId,
       roomId: payload.roomId,
-      status: payload.status ?? ReservationStatus.BOOKED,
+      status,
       source: payload.source ?? ReservationSource.DIRECT,
       paymentStatus: payload.paymentStatus ?? PaymentStatus.PENDING,
       packageType: payload.packageType,
-      roomCategory: payload.roomCategory ?? RoomCategory.STANDARD,
+      roomCategory,
       checkIn: payload.checkIn,
       checkOut: payload.checkOut,
       adults: payload.adults ?? 2,

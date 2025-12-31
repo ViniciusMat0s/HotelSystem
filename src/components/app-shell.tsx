@@ -6,7 +6,8 @@ import { useBrandingStore } from "@/stores/branding-store";
 
 const NAV_ITEMS = [
   { href: "/", label: "Painel", detail: "Visao geral" },
-  { href: "/rooms", label: "Quartos", detail: "Livro de reservas" },
+  { href: "/bookings", label: "Livro de reservas", detail: "Calendario dos quartos" },
+  { href: "/rooms", label: "Quartos", detail: "Inventario e status" },
   { href: "/finance", label: "Financeiro", detail: "Receita e lucro" },
   { href: "/maintenance", label: "Manutencao", detail: "Incidentes e recorrencia" },
   { href: "/pricing", label: "Precificacao", detail: "Mercado e clima" },

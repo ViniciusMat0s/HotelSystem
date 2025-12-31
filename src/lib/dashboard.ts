@@ -29,7 +29,7 @@ export async function getDashboardSnapshot() {
           lte: endMonth,
         },
       },
-      select: { checkIn: true, status: true, totalAmount: true },
+      select: { checkIn: true, status: true, totalAmount: true, source: true },
     }),
   ]);
 
@@ -62,12 +62,20 @@ export async function getDashboardSnapshot() {
   });
 
   const monthStats = reservations.reduce<
-    Record<string, { reservedCount: number; canceledCount: number; totalAmount: number }>
+    Record<
+      string,
+      {
+        reservedCount: number;
+        canceledCount: number;
+        totalAmount: number;
+        totalCount: number;
+      }
+    >
   >((acc, item) => {
     const date = new Date(item.checkIn);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) {
-      acc[key] = { reservedCount: 0, canceledCount: 0, totalAmount: 0 };
+      acc[key] = { reservedCount: 0, canceledCount: 0, totalAmount: 0, totalCount: 0 };
     }
     if (item.status === ReservationStatus.CANCELED) {
       acc[key].canceledCount += 1;
@@ -77,6 +85,7 @@ export async function getDashboardSnapshot() {
         acc[key].totalAmount += Number(item.totalAmount);
       }
     }
+    acc[key].totalCount += 1;
     return acc;
   }, {});
 
@@ -86,6 +95,46 @@ export async function getDashboardSnapshot() {
     canceledCount: monthStats[bucket.key]?.canceledCount ?? 0,
     totalAmount: monthStats[bucket.key]?.totalAmount ?? 0,
   }));
+
+  const cancelRateByMonth = monthBuckets.map((bucket) => {
+    const stats = monthStats[bucket.key] ?? {
+      reservedCount: 0,
+      canceledCount: 0,
+      totalAmount: 0,
+      totalCount: 0,
+    };
+    const totalCount = stats.totalCount;
+    return {
+      key: bucket.key,
+      label: bucket.label,
+      totalCount,
+      canceledCount: stats.canceledCount,
+      rate: totalCount > 0 ? stats.canceledCount / totalCount : 0,
+    };
+  });
+
+  const sourceStats = reservations.reduce<
+    Record<string, { count: number; canceledCount: number }>
+  >((acc, item) => {
+    const key = item.source;
+    if (!acc[key]) {
+      acc[key] = { count: 0, canceledCount: 0 };
+    }
+    acc[key].count += 1;
+    if (item.status === ReservationStatus.CANCELED) {
+      acc[key].canceledCount += 1;
+    }
+    return acc;
+  }, {});
+
+  const reservationsBySource = Object.entries(sourceStats)
+    .map(([source, data]) => ({
+      source,
+      count: data.count,
+      canceledCount: data.canceledCount,
+      rate: data.count > 0 ? data.canceledCount / data.count : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
 
   const openMaintenance = await prisma.roomIssue.count({
     where: {
@@ -112,6 +161,8 @@ export async function getDashboardSnapshot() {
     profit,
     channels,
     reservationsByMonth,
+    reservationsBySource,
+    cancelRateByMonth,
     alerts: {
       openMaintenance,
       pendingNoShow,
