@@ -10,8 +10,11 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
+  createReservationAction,
+  swapReservationAction,
   updateReservationAction,
   type ReservationActionState,
+  type ReservationCreateState,
 } from "@/actions/reservation";
 import { ActionModal } from "@/components/action-modal";
 import { Pill } from "@/components/cards";
@@ -34,6 +37,18 @@ type ReservationItem = {
 };
 
 type DragMode = "move" | "resize-start" | "resize-end";
+
+type SelectionState = {
+  roomId: string;
+  startIndex: number;
+  endIndex: number;
+};
+
+type QuickDraft = {
+  roomId: string;
+  checkIn: Date;
+  checkOut: Date;
+};
 
 type DragState = {
   id: string;
@@ -125,6 +140,7 @@ const statusTone = (status: string) => {
 };
 
 const initialActionState: ReservationActionState = { status: "idle" };
+const initialCreateState: ReservationCreateState = { status: "idle" };
 
 export function ReservationsLedger({
   rooms,
@@ -143,16 +159,35 @@ export function ReservationsLedger({
   const [resultOpen, setResultOpen] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [selection, setSelection] = useState<SelectionState | null>(null);
+  const [quickDraft, setQuickDraft] = useState<QuickDraft | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const dragPointerRef = useRef<{ x: number; y: number } | null>(null);
   const scrollLoopRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const scrollVelocityRef = useRef({ x: 0, y: 0 });
+  const selectionRef = useRef<SelectionState | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
 
-  const [actionState, formAction] = useActionState(
+  const [updateState, updateFormAction] = useActionState(
     updateReservationAction,
     initialActionState
+  );
+  const [swapState, swapFormAction] = useActionState(
+    swapReservationAction,
+    initialActionState
+  );
+
+  const handleResult = useCallback(
+    (state: { status: "idle" | "error" | "ok"; message?: string }, title: string) => {
+      setResult(state);
+      setResultTitle(title);
+      setResultOpen(true);
+      if (state.status === "ok") {
+        router.refresh();
+      }
+    },
+    [router]
   );
 
   const { startDate, endDate } = useMemo(() => {
@@ -195,20 +230,45 @@ export function ReservationsLedger({
     return map;
   }, [reservations]);
 
-  const dragConflict = useMemo(() => {
+  const getConflicts = useCallback(
+    (
+      targetRoomId: string,
+      startIndex: number,
+      endIndex: number,
+      reservationId: string
+    ) => {
+      const roomReservations = reservationsByRoom[targetRoomId] ?? [];
+      if (roomReservations.length === 0) return [];
+      return roomReservations.filter((reservation) => {
+        if (reservation.id === reservationId) return false;
+        const checkIn = parseDateTime(reservation.checkIn);
+        const checkOut = parseDateTime(reservation.checkOut);
+        if (!checkIn || !checkOut) return false;
+        const otherStart = diffDays(checkIn, startDate);
+        const otherEnd = diffDays(checkOut, startDate);
+        return startIndex < otherEnd && endIndex > otherStart;
+      });
+    },
+    [reservationsByRoom, startDate]
+  );
+
+  const dragConflicts = useMemo(() => {
+    if (!dragState) return [];
+    return getConflicts(
+      dragState.previewRoomId,
+      dragState.previewStart,
+      dragState.previewEnd,
+      dragState.id
+    );
+  }, [dragState, getConflicts]);
+
+  const dragSwapCandidate = useMemo(() => {
     if (!dragState) return false;
-    const roomReservations = reservationsByRoom[dragState.previewRoomId] ?? [];
-    if (roomReservations.length === 0) return false;
-    return roomReservations.some((reservation) => {
-      if (reservation.id === dragState.id) return false;
-      const checkIn = parseDateTime(reservation.checkIn);
-      const checkOut = parseDateTime(reservation.checkOut);
-      if (!checkIn || !checkOut) return false;
-      const otherStart = diffDays(checkIn, startDate);
-      const otherEnd = diffDays(checkOut, startDate);
-      return dragState.previewStart < otherEnd && dragState.previewEnd > otherStart;
-    });
-  }, [dragState, reservationsByRoom, startDate]);
+    return (
+      dragState.mode === "move" &&
+      dragConflicts.length === 1
+    );
+  }, [dragConflicts.length, dragState]);
 
   const columns = "220px 1fr";
   const dayColumns = `repeat(${dates.length}, minmax(70px, 1fr))`;
@@ -231,6 +291,11 @@ export function ReservationsLedger({
     dragStateRef.current = null;
     dragPointerRef.current = null;
     setDragState(null);
+  }, []);
+
+  const updateSelection = useCallback((next: SelectionState | null) => {
+    selectionRef.current = next;
+    setSelection(next);
   }, []);
 
   const getPointerIndex = useCallback(
@@ -279,9 +344,27 @@ export function ReservationsLedger({
         formData.set("roomId", roomId);
       }
       setSavingId(reservationId);
-      formAction(formData);
+      updateFormAction(formData);
     },
-    [formAction]
+    [updateFormAction]
+  );
+
+  const submitSwap = useCallback(
+    (
+      reservationId: string,
+      targetReservationId: string,
+      checkIn: Date,
+      checkOut: Date
+    ) => {
+      const formData = new FormData();
+      formData.set("reservationId", reservationId);
+      formData.set("targetReservationId", targetReservationId);
+      formData.set("checkIn", formatInputDate(checkIn));
+      formData.set("checkOut", formatInputDate(checkOut));
+      setSavingId(reservationId);
+      swapFormAction(formData);
+    },
+    [swapFormAction]
   );
 
   const updatePreviewFromPointer = useCallback(
@@ -381,14 +464,14 @@ export function ReservationsLedger({
     scrollVelocityRef.current = { x: 0, y: 0 };
   }, []);
 
-  const runAutoScroll = useCallback(() => {
+  const runAutoScroll = useCallback(function runAutoScrollLoop() {
     if (!dragStateRef.current) {
       stopAutoScroll();
       return;
     }
     const pointer = dragPointerRef.current;
     if (!pointer) {
-      scrollLoopRef.current = window.requestAnimationFrame(runAutoScroll);
+      scrollLoopRef.current = window.requestAnimationFrame(runAutoScrollLoop);
       return;
     }
     const target = computeAutoScroll(pointer.x, pointer.y);
@@ -407,7 +490,7 @@ export function ReservationsLedger({
       }
       updatePreviewFromPointer(pointer.x, pointer.y);
     }
-    scrollLoopRef.current = window.requestAnimationFrame(runAutoScroll);
+    scrollLoopRef.current = window.requestAnimationFrame(runAutoScrollLoop);
   }, [computeAutoScroll, stopAutoScroll, updatePreviewFromPointer]);
 
   const startAutoScroll = useCallback(() => {
@@ -447,18 +530,37 @@ export function ReservationsLedger({
     [getPointerIndex, savingId, startAutoScroll, updateDragState]
   );
 
+  const startSelection = useCallback(
+    (event: React.PointerEvent, roomId: string) => {
+      if (savingId || dragStateRef.current || quickDraft) return;
+      if (event.button !== 0) return;
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-reservation]")) return;
+      const pointerIndex = getPointerIndex(roomId, event.clientX);
+      if (pointerIndex === null) return;
+      updateSelection({ roomId, startIndex: pointerIndex, endIndex: pointerIndex });
+      event.preventDefault();
+    },
+    [getPointerIndex, quickDraft, savingId, updateSelection]
+  );
+
   useEffect(() => {
-    if (actionState.status === "idle") return;
-    setResult(actionState);
-    setResultTitle(
-      actionState.status === "ok" ? "Reserva atualizada" : "Falha ao atualizar"
+    if (updateState.status === "idle") return;
+    handleResult(
+      updateState,
+      updateState.status === "ok" ? "Reserva atualizada" : "Falha ao atualizar"
     );
-    setResultOpen(true);
     setSavingId(null);
-    if (actionState.status === "ok") {
-      router.refresh();
-    }
-  }, [actionState, router]);
+  }, [handleResult, updateState]);
+
+  useEffect(() => {
+    if (swapState.status === "idle") return;
+    handleResult(
+      swapState,
+      swapState.status === "ok" ? "Reservas trocadas" : "Falha ao trocar reservas"
+    );
+    setSavingId(null);
+  }, [handleResult, swapState]);
 
   useEffect(() => {
     if (!dragState) return;
@@ -468,6 +570,36 @@ export function ReservationsLedger({
       document.body.style.userSelect = previousSelect;
     };
   }, [dragState]);
+
+  useEffect(() => {
+    const handleSelectionMove = (event: PointerEvent) => {
+      const current = selectionRef.current;
+      if (!current) return;
+      const pointerIndex = getPointerIndex(current.roomId, event.clientX);
+      if (pointerIndex === null || pointerIndex === current.endIndex) return;
+      updateSelection({ ...current, endIndex: pointerIndex });
+    };
+
+    const handleSelectionEnd = () => {
+      const current = selectionRef.current;
+      if (!current) return;
+      updateSelection(null);
+      const startIndex = Math.min(current.startIndex, current.endIndex);
+      const endIndex = Math.max(current.startIndex, current.endIndex);
+      const checkIn = addDays(startDate, startIndex);
+      const checkOut = addDays(startDate, endIndex + 1);
+      setQuickDraft({ roomId: current.roomId, checkIn, checkOut });
+    };
+
+    window.addEventListener("pointermove", handleSelectionMove);
+    window.addEventListener("pointerup", handleSelectionEnd);
+    window.addEventListener("pointercancel", handleSelectionEnd);
+    return () => {
+      window.removeEventListener("pointermove", handleSelectionMove);
+      window.removeEventListener("pointerup", handleSelectionEnd);
+      window.removeEventListener("pointercancel", handleSelectionEnd);
+    };
+  }, [getPointerIndex, startDate, updateSelection]);
 
   useEffect(() => {
     if (dragState) {
@@ -493,7 +625,30 @@ export function ReservationsLedger({
     const handleUp = () => {
       const current = dragStateRef.current;
       if (!current) return;
+      const conflicts = getConflicts(
+        current.previewRoomId,
+        current.previewStart,
+        current.previewEnd,
+        current.id
+      );
       clearDragState();
+      if (conflicts.length > 0) {
+        if (current.mode === "move" && conflicts.length === 1) {
+          const nextCheckIn = addDays(startDate, current.previewStart);
+          const nextCheckOut = addDays(startDate, current.previewEnd);
+          submitSwap(current.id, conflicts[0].id, nextCheckIn, nextCheckOut);
+          return;
+        }
+        handleResult(
+          {
+            status: "error",
+            message:
+              "Conflito detectado: ja existe uma reserva nesse periodo para este quarto.",
+          },
+          "Conflito ao mover"
+        );
+        return;
+      }
       const roomChanged = current.previewRoomId !== current.baseRoomId;
       if (
         current.previewStart === current.baseStart &&
@@ -522,7 +677,10 @@ export function ReservationsLedger({
     };
   }, [
     clearDragState,
+    handleResult,
+    getConflicts,
     startDate,
+    submitSwap,
     submitUpdate,
     updatePreviewFromPointer,
   ]);
@@ -562,13 +720,25 @@ export function ReservationsLedger({
                 ? [...roomReservations, draggingReservation]
                 : roomReservations;
               const isTargetRow = dragState?.previewRoomId === room.id;
-              const isConflictRow = Boolean(isTargetRow && dragConflict);
+              const isSwapRow = Boolean(isTargetRow && dragSwapCandidate);
+              const isConflictRow = Boolean(
+                isTargetRow && dragConflicts.length > 0 && !isSwapRow
+              );
+              const selectionRange =
+                selection && selection.roomId === room.id
+                  ? {
+                      start: Math.min(selection.startIndex, selection.endIndex),
+                      end: Math.max(selection.startIndex, selection.endIndex),
+                    }
+                  : null;
               return (
                 <div
                   key={room.id}
                   className={`relative grid items-stretch rounded-2xl border border-border/70 bg-surface/60 ${
                     isTargetRow
-                      ? isConflictRow
+                      ? isSwapRow
+                        ? "border-accent/60 ring-1 ring-accent/50"
+                        : isConflictRow
                         ? "border-primary/60 ring-1 ring-primary/50"
                         : "border-secondary/60 ring-1 ring-secondary/50"
                       : ""
@@ -578,12 +748,14 @@ export function ReservationsLedger({
                   {isTargetRow ? (
                     <span
                       className={`pointer-events-none absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.2em] ${
-                        isConflictRow
+                        isSwapRow
+                          ? "bg-accent/20 text-accent"
+                          : isConflictRow
                           ? "bg-primary/20 text-primary"
                           : "bg-secondary/20 text-secondary"
                       }`}
                     >
-                      {isConflictRow ? "Conflito" : "Destino"}
+                      {isSwapRow ? "Troca" : isConflictRow ? "Conflito" : "Destino"}
                     </span>
                   ) : null}
                   <div className="flex flex-col justify-center gap-1 px-3 py-3">
@@ -595,6 +767,7 @@ export function ReservationsLedger({
                   <div
                     className="relative min-h-[56px]"
                     ref={setRowRef(room.id)}
+                    onPointerDown={(event) => startSelection(event, room.id)}
                   >
                     <div
                       className="absolute inset-0 grid"
@@ -609,6 +782,23 @@ export function ReservationsLedger({
                         />
                       ))}
                     </div>
+                    {selectionRange ? (
+                      <div
+                        className="pointer-events-none absolute inset-0 grid items-center"
+                        style={{ gridTemplateColumns: dayColumns }}
+                      >
+                        <div
+                          className="mx-1 flex h-10 items-center rounded-2xl border border-secondary/50 bg-secondary/15 px-3 text-xs text-secondary shadow-tight"
+                          style={{
+                            gridColumn: `${selectionRange.start + 1} / ${
+                              selectionRange.end + 2
+                            }`,
+                          }}
+                        >
+                          Nova reserva
+                        </div>
+                      </div>
+                    ) : null}
                     <div
                       className="absolute inset-0 grid items-center"
                       style={{ gridTemplateColumns: dayColumns }}
@@ -653,6 +843,7 @@ export function ReservationsLedger({
                           <div
                             key={reservation.id}
                             role="button"
+                            data-reservation
                             onPointerDown={(event) =>
                               isEditable
                                 ? startDrag(
@@ -672,7 +863,9 @@ export function ReservationsLedger({
                                 : "cursor-not-allowed opacity-60"
                             } ${
                               isDragging
-                                ? isConflictRow
+                                ? isSwapRow
+                                  ? "ring-1 ring-accent/60"
+                                  : isConflictRow
                                   ? "ring-1 ring-primary/60"
                                   : "ring-1 ring-secondary/40"
                                 : ""
@@ -682,7 +875,9 @@ export function ReservationsLedger({
                             }}
                             title={
                               isEditable
-                                ? isDragging && isConflictRow
+                                ? isDragging && isSwapRow
+                                  ? "Solte para trocar com a reserva deste quarto."
+                                  : isDragging && isConflictRow
                                   ? "Conflito com outra reserva neste quarto."
                                   : `${reservation.guestName} - ${label}`
                                 : "Ajuste o periodo para editar esta reserva."
@@ -738,6 +933,20 @@ export function ReservationsLedger({
         </div>
       </div>
 
+      {quickDraft ? (
+        <QuickReservationModal
+          draft={quickDraft}
+          room={rooms.find((room) => room.id === quickDraft.roomId) ?? null}
+          onClose={() => setQuickDraft(null)}
+          onResult={(state) =>
+            handleResult(
+              state,
+              state.status === "ok" ? "Reserva criada" : "Falha ao criar reserva"
+            )
+          }
+        />
+      ) : null}
+
       <ActionModal
         open={resultOpen && Boolean(result)}
         tone={result?.status === "error" ? "error" : "success"}
@@ -747,5 +956,129 @@ export function ReservationsLedger({
         actionLabel="Ok, entendi"
       />
     </>
+  );
+}
+
+function QuickReservationModal({
+  draft,
+  room,
+  onClose,
+  onResult,
+}: {
+  draft: QuickDraft;
+  room: RoomItem | null;
+  onClose: () => void;
+  onResult: (state: ReservationActionState) => void;
+}) {
+  const [state, formAction] = useActionState(
+    createReservationAction,
+    initialCreateState
+  );
+
+  useEffect(() => {
+    if (state.status === "idle") return;
+    onResult({ status: state.status, message: state.message });
+    if (state.status === "ok") {
+      onClose();
+    }
+  }, [onClose, onResult, state.message, state.status]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-8 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="panel-strong w-full max-w-xl rounded-3xl border border-border bg-surface-strong p-6"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="font-display text-lg text-foreground">Nova reserva</p>
+            <p className="text-xs text-muted">
+              {room ? `Quarto ${room.number}` : "Quarto selecionado"} ·{" "}
+              {formatInputDate(draft.checkIn)} ate {formatInputDate(draft.checkOut)}
+            </p>
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
+            Fechar
+          </button>
+        </div>
+
+        <form action={formAction} className="mt-6 space-y-4 text-sm">
+          <input type="hidden" name="guestMode" value="new" />
+          <input type="hidden" name="roomId" value={draft.roomId} />
+          <input type="hidden" name="checkIn" value={formatInputDate(draft.checkIn)} />
+          <input type="hidden" name="checkOut" value={formatInputDate(draft.checkOut)} />
+          <input type="hidden" name="status" value="BOOKED" />
+          <input type="hidden" name="paymentStatus" value="PENDING" />
+          <input type="hidden" name="source" value="DIRECT" />
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              name="guestFirstName"
+              placeholder="Nome"
+              className="input-field"
+              required
+            />
+            <input
+              name="guestLastName"
+              placeholder="Sobrenome"
+              className="input-field"
+              required
+            />
+            <input
+              name="guestEmail"
+              type="email"
+              placeholder="Email (opcional)"
+              className="input-field"
+            />
+            <input
+              name="guestPhone"
+              placeholder="Telefone/WhatsApp"
+              className="input-field"
+            />
+            <input
+              type="number"
+              name="adults"
+              min={1}
+              defaultValue={2}
+              className="input-field"
+              placeholder="Adultos"
+            />
+            <input
+              type="number"
+              name="children"
+              min={0}
+              defaultValue={0}
+              className="input-field"
+              placeholder="Criancas"
+            />
+          </div>
+
+          <textarea
+            name="notes"
+            placeholder="Observacoes internas"
+            className="input-field min-h-[110px] resize-none"
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-muted">
+              Reserva rapida: preencha o minimo para confirmar.
+            </span>
+            <div className="flex gap-3">
+              <button type="button" className="btn btn-outline" onClick={onClose}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn btn-primary">
+                Criar reserva
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

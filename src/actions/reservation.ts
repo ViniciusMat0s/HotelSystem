@@ -50,6 +50,28 @@ const ReservationFormSchema = z.object({
   notes: z.string().optional(),
 });
 
+const SwapReservationSchema = z.object({
+  reservationId: z.string().min(1),
+  targetReservationId: z.string().min(1),
+  checkIn: z.string().min(1),
+  checkOut: z.string().min(1),
+});
+
+const BLOCKED_ROOM_STATUSES: RoomStatus[] = [
+  RoomStatus.MAINTENANCE,
+  RoomStatus.OUT_OF_SERVICE,
+];
+
+const BLOCKING_RESERVATION_STATUSES: ReservationStatus[] = [
+  ReservationStatus.BOOKED,
+  ReservationStatus.CHECKED_IN,
+];
+
+const SWAP_ALLOWED_STATUSES: ReservationStatus[] = [
+  ReservationStatus.BOOKED,
+  ReservationStatus.CHECKED_IN,
+];
+
 export type ReservationCreateState = {
   status: "idle" | "error" | "ok";
   message?: string;
@@ -649,4 +671,285 @@ export async function cancelReservationAction(
   revalidatePath("/reservations");
 
   return { status: "ok", message: "Reserva cancelada com sucesso." };
+}
+
+const resolveRoomStatusAfterSwap = (
+  incoming: ReservationStatus,
+  outgoing: ReservationStatus
+) => {
+  if (incoming === ReservationStatus.CHECKED_IN) {
+    return RoomStatus.OCCUPIED;
+  }
+  if (
+    incoming === ReservationStatus.CHECKED_OUT ||
+    incoming === ReservationStatus.CANCELED ||
+    incoming === ReservationStatus.NO_SHOW
+  ) {
+    return RoomStatus.AVAILABLE;
+  }
+  if (outgoing === ReservationStatus.CHECKED_IN) {
+    return RoomStatus.AVAILABLE;
+  }
+  return null;
+};
+
+export async function swapReservationAction(
+  _prevState: ReservationActionState,
+  formData: FormData
+): Promise<ReservationActionState> {
+  const payload = SwapReservationSchema.safeParse({
+    reservationId: formData.get("reservationId")?.toString(),
+    targetReservationId: formData.get("targetReservationId")?.toString(),
+    checkIn: formData.get("checkIn")?.toString(),
+    checkOut: formData.get("checkOut")?.toString(),
+  });
+
+  if (!payload.success) {
+    return { status: "error", message: "Dados invalidos para troca." };
+  }
+
+  if (payload.data.reservationId === payload.data.targetReservationId) {
+    return { status: "error", message: "Reservas identicas." };
+  }
+
+  const checkIn = parseDate(payload.data.checkIn);
+  const checkOut = parseDate(payload.data.checkOut);
+  if (!checkIn || !checkOut) {
+    return { status: "error", message: "Datas invalidas." };
+  }
+  if (checkOut <= checkIn) {
+    return { status: "error", message: "Check-out deve ser depois do check-in." };
+  }
+
+  const hotel = await ensureDefaultHotel();
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const reservations = await tx.reservation.findMany({
+        where: {
+          id: { in: [payload.data.reservationId, payload.data.targetReservationId] },
+          hotelId: hotel.id,
+        },
+      });
+
+      if (reservations.length !== 2) {
+        throw new Error("Reserva nao encontrada.");
+      }
+
+      const primary =
+        reservations.find(
+          (reservation) => reservation.id === payload.data.reservationId
+        ) ?? reservations[0];
+      const target =
+        reservations.find(
+          (reservation) => reservation.id === payload.data.targetReservationId
+        ) ?? reservations[1];
+
+      if (!primary.roomId || !target.roomId) {
+        throw new Error("Reserva sem quarto alocado.");
+      }
+
+      if (
+        !SWAP_ALLOWED_STATUSES.includes(primary.status) ||
+        !SWAP_ALLOWED_STATUSES.includes(target.status)
+      ) {
+        throw new Error("Apenas reservas ativas podem ser trocadas.");
+      }
+
+      const rooms = await tx.room.findMany({
+        where: { id: { in: [primary.roomId, target.roomId] }, hotelId: hotel.id },
+        select: { id: true, status: true, category: true },
+      });
+
+      const primaryRoom = rooms.find((room) => room.id === primary.roomId);
+      const targetRoom = rooms.find((room) => room.id === target.roomId);
+
+      if (!primaryRoom || !targetRoom) {
+        throw new Error("Quarto nao encontrado.");
+      }
+
+      const enforcePrimary = shouldEnforceAvailability(primary.status);
+      const enforceTarget = shouldEnforceAvailability(target.status);
+      const sameRoom = primary.roomId === target.roomId;
+      const nextPrimaryRoom = sameRoom ? primaryRoom : targetRoom;
+      const nextTargetRoom = sameRoom ? targetRoom : primaryRoom;
+      const nextPrimaryCheckIn = sameRoom ? target.checkIn : checkIn;
+      const nextPrimaryCheckOut = sameRoom ? target.checkOut : checkOut;
+      const nextTargetCheckIn = sameRoom ? primary.checkIn : target.checkIn;
+      const nextTargetCheckOut = sameRoom ? primary.checkOut : target.checkOut;
+
+      if (sameRoom) {
+        if (
+          (enforcePrimary || enforceTarget) &&
+          BLOCKED_ROOM_STATUSES.includes(primaryRoom.status)
+        ) {
+          throw new Error("Quarto indisponivel por manutencao.");
+        }
+      } else {
+        if (
+          enforcePrimary &&
+          BLOCKED_ROOM_STATUSES.includes(targetRoom.status)
+        ) {
+          throw new Error("Quarto destino indisponivel por manutencao.");
+        }
+        if (
+          enforceTarget &&
+          BLOCKED_ROOM_STATUSES.includes(primaryRoom.status)
+        ) {
+          throw new Error("Quarto original indisponivel por manutencao.");
+        }
+      }
+
+      const countConflicts = async (roomId: string, from: Date, to: Date) =>
+        tx.reservation.count({
+          where: {
+            hotelId: hotel.id,
+            roomId,
+            status: { in: BLOCKING_RESERVATION_STATUSES },
+            checkIn: { lt: to },
+            checkOut: { gt: from },
+            id: { notIn: [primary.id, target.id] },
+          },
+        });
+
+      const conflictsPrimary = await countConflicts(
+        nextPrimaryRoom.id,
+        nextPrimaryCheckIn,
+        nextPrimaryCheckOut
+      );
+
+      if (conflictsPrimary > 0) {
+        throw new Error("Conflito no quarto destino para o periodo.");
+      }
+
+      const conflictsTarget = await countConflicts(
+        nextTargetRoom.id,
+        nextTargetCheckIn,
+        nextTargetCheckOut
+      );
+
+      if (conflictsTarget > 0) {
+        throw new Error("Conflito no quarto de origem para a troca.");
+      }
+
+      await tx.reservation.update({
+        where: { id: primary.id },
+        data: {
+          roomId: nextPrimaryRoom.id,
+          roomCategory: nextPrimaryRoom.category,
+          checkIn: nextPrimaryCheckIn,
+          checkOut: nextPrimaryCheckOut,
+        },
+      });
+
+      await tx.reservation.update({
+        where: { id: target.id },
+        data: {
+          roomId: nextTargetRoom.id,
+          roomCategory: nextTargetRoom.category,
+          checkIn: nextTargetCheckIn,
+          checkOut: nextTargetCheckOut,
+        },
+      });
+
+      const primaryLog = await tx.roomUsageLog.findFirst({
+        where: { reservationId: primary.id },
+      });
+      if (primaryLog) {
+        await tx.roomUsageLog.update({
+          where: { id: primaryLog.id },
+          data: {
+            roomId: nextPrimaryRoom.id,
+            startedAt: nextPrimaryCheckIn,
+            endedAt: nextPrimaryCheckOut,
+            note: primaryLog.note
+              ? `${primaryLog.note} | Troca de reserva.`
+              : "Troca de reserva.",
+          },
+        });
+      } else {
+        await tx.roomUsageLog.create({
+          data: {
+            roomId: nextPrimaryRoom.id,
+            reservationId: primary.id,
+            startedAt: nextPrimaryCheckIn,
+            endedAt: nextPrimaryCheckOut,
+            note: "Troca de reserva.",
+          },
+        });
+      }
+
+      const targetLog = await tx.roomUsageLog.findFirst({
+        where: { reservationId: target.id },
+      });
+      if (targetLog) {
+        await tx.roomUsageLog.update({
+          where: { id: targetLog.id },
+          data: {
+            roomId: nextTargetRoom.id,
+            startedAt: nextTargetCheckIn,
+            endedAt: nextTargetCheckOut,
+            note: targetLog.note
+              ? `${targetLog.note} | Troca de reserva.`
+              : "Troca de reserva.",
+          },
+        });
+      } else {
+        await tx.roomUsageLog.create({
+          data: {
+            roomId: nextTargetRoom.id,
+            reservationId: target.id,
+            startedAt: nextTargetCheckIn,
+            endedAt: nextTargetCheckOut,
+            note: "Troca de reserva.",
+          },
+        });
+      }
+
+      await tx.digitalKey.updateMany({
+        where: { reservationId: primary.id },
+        data: { roomId: nextPrimaryRoom.id },
+      });
+      await tx.digitalKey.updateMany({
+        where: { reservationId: target.id },
+        data: { roomId: nextTargetRoom.id },
+      });
+
+      if (!sameRoom) {
+        const nextPrimaryRoomStatus = resolveRoomStatusAfterSwap(
+          target.status,
+          primary.status
+        );
+        const nextTargetRoomStatus = resolveRoomStatusAfterSwap(
+          primary.status,
+          target.status
+        );
+
+        if (nextPrimaryRoomStatus) {
+          await tx.room.update({
+            where: { id: primaryRoom.id },
+            data: { status: nextPrimaryRoomStatus },
+          });
+        }
+        if (nextTargetRoomStatus) {
+          await tx.room.update({
+            where: { id: targetRoom.id },
+            data: { status: nextTargetRoomStatus },
+          });
+        }
+      }
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message) {
+      return { status: "error", message: error.message };
+    }
+    return { status: "error", message: "Falha ao trocar reservas." };
+  }
+
+  revalidatePath("/rooms");
+  revalidatePath("/reservations");
+  revalidatePath("/bookings");
+  revalidatePath("/");
+
+  return { status: "ok", message: "Reservas trocadas com sucesso." };
 }

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma, RoomCategory, RoomStatus } from "@/generated/prisma";
 import { ensureDefaultHotel } from "@/lib/hotel";
 import { prisma } from "@/lib/prisma";
+import { reassignReservationsForMaintenanceRoom } from "@/lib/room-reassignment";
 
 export type RoomActionState = {
   status: "idle" | "error" | "ok";
@@ -175,32 +176,55 @@ export async function updateRoomAction(
     return { status: "error", message: "Quarto nao encontrado." };
   }
 
+  const nextStatus = payload.data.status ?? room.status;
+
   try {
-    await prisma.room.update({
-      where: { id: room.id },
-      data: {
-        number: payload.data.number.trim(),
-        name: normalizeText(payload.data.name),
-        floor,
-        category: payload.data.category ?? room.category,
-        status: payload.data.status ?? room.status,
-        baseRate: baseRate === null ? null : new Prisma.Decimal(baseRate),
-        maxGuests,
-        features: normalizeText(payload.data.features),
-        notes: normalizeText(payload.data.notes),
-      },
+    const moved = await prisma.$transaction(async (tx) => {
+      let movedCount = 0;
+      if (nextStatus === RoomStatus.MAINTENANCE) {
+        const result = await reassignReservationsForMaintenanceRoom(tx, {
+          hotelId: hotel.id,
+          roomId: room.id,
+        });
+        movedCount = result.moved;
+      }
+
+      await tx.room.update({
+        where: { id: room.id },
+        data: {
+          number: payload.data.number.trim(),
+          name: normalizeText(payload.data.name),
+          floor,
+          category: payload.data.category ?? room.category,
+          status: nextStatus,
+          baseRate: baseRate === null ? null : new Prisma.Decimal(baseRate),
+          maxGuests,
+          features: normalizeText(payload.data.features),
+          notes: normalizeText(payload.data.notes),
+        },
+      });
+
+      return movedCount;
     });
+
+    revalidatePath("/rooms");
+    revalidatePath("/");
+
+    return moved > 0
+      ? {
+          status: "ok",
+          message: `Quarto atualizado e ${moved} reservas remanejadas.`,
+        }
+      : { status: "ok", message: "Quarto atualizado com sucesso." };
   } catch (error) {
     if (isUniqueError(error)) {
       return { status: "error", message: "Numero de quarto ja cadastrado." };
     }
+    if (error instanceof Error && error.message) {
+      return { status: "error", message: error.message };
+    }
     return { status: "error", message: "Falha ao atualizar quarto." };
   }
-
-  revalidatePath("/rooms");
-  revalidatePath("/");
-
-  return { status: "ok", message: "Quarto atualizado com sucesso." };
 }
 
 export async function deleteRoomAction(

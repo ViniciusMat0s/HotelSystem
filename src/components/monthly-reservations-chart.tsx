@@ -42,12 +42,12 @@ export function MonthlyReservationsChart({
 }: {
   items: MonthlyReservationItem[];
 }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [lastActiveIndex, setLastActiveIndex] = useState<number | null>(null);
+
   if (items.length === 0) {
     return <p className="text-sm text-muted">Sem dados de reservas.</p>;
   }
-
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [lastActiveIndex, setLastActiveIndex] = useState<number | null>(null);
 
   const maxValue = Math.max(
     1,
