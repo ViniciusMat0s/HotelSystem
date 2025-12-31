@@ -5,7 +5,10 @@ import {
 } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 
-const BLOCKED_ROOM_STATUSES = [RoomStatus.MAINTENANCE, RoomStatus.OUT_OF_SERVICE];
+const BLOCKED_ROOM_STATUSES: RoomStatus[] = [
+  RoomStatus.MAINTENANCE,
+  RoomStatus.OUT_OF_SERVICE,
+];
 const BLOCKING_RESERVATION_STATUSES = [
   ReservationStatus.BOOKED,
   ReservationStatus.CHECKED_IN,

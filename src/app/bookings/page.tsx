@@ -30,11 +30,12 @@ type SearchParams = {
 export default async function BookingLedgerPage({
   searchParams,
 }: {
-  searchParams?: SearchParams;
+  searchParams?: Promise<SearchParams>;
 }) {
   const today = normalizeDate(new Date());
-  const startDate = parseDate(searchParams?.start) ?? today;
-  let endDate = parseDate(searchParams?.end) ?? addDays(startDate, 13);
+  const resolvedParams = await searchParams;
+  const startDate = parseDate(resolvedParams?.start) ?? today;
+  let endDate = parseDate(resolvedParams?.end) ?? addDays(startDate, 13);
   if (endDate < startDate) {
     endDate = startDate;
   }
