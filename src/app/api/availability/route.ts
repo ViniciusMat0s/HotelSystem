@@ -47,6 +47,7 @@ export async function GET(request: Request) {
       checkOut: reservation.checkOut.toISOString(),
       status: reservation.status,
       guestName: `${reservation.guest.firstName} ${reservation.guest.lastName}`,
+      noShowStatus: reservation.noShowCase?.status ?? null,
     })),
   });
 }

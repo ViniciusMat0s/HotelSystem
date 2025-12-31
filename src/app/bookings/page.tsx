@@ -54,6 +54,7 @@ export default async function BookingLedgerPage({
     checkOut: reservation.checkOut.toISOString(),
     status: reservation.status,
     guestName: `${reservation.guest.firstName} ${reservation.guest.lastName}`,
+    noShowStatus: reservation.noShowCase?.status ?? null,
   }));
 
   return (

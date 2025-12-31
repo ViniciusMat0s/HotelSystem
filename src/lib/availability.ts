@@ -156,6 +156,7 @@ export async function getReservationLedger({
         checkOut: true,
         status: true,
         guest: { select: { firstName: true, lastName: true } },
+        noShowCase: { select: { status: true } },
       },
       orderBy: { checkIn: "asc" },
     }),

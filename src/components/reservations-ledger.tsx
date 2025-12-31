@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -17,7 +18,6 @@ import {
   type ReservationCreateState,
 } from "@/actions/reservation";
 import { ActionModal } from "@/components/action-modal";
-import { Pill } from "@/components/cards";
 
 type RoomItem = {
   id: string;
@@ -34,6 +34,7 @@ type ReservationItem = {
   checkOut: string;
   status: string;
   guestName: string;
+  noShowStatus?: string | null;
 };
 
 type DragMode = "move" | "resize-start" | "resize-end";
@@ -132,11 +133,12 @@ const roomSort = (a: { number: string }, b: { number: string }) => {
   return a.number.localeCompare(b.number, "pt-BR");
 };
 
-const statusTone = (status: string) => {
-  if (status === "CHECKED_IN") return "positive";
-  if (status === "BOOKED") return "neutral";
-  if (status === "NO_SHOW") return "critical";
-  return "warning";
+const badgeVariant = (status: string, noShowStatus?: string | null) => {
+  if (noShowStatus === "ESCALATED") return "late";
+  if (noShowStatus === "PENDING") return "pending";
+  if (status === "NO_SHOW") return "late";
+  if (status === "CHECKED_IN" || status === "BOOKED") return "confirmed";
+  return "neutral";
 };
 
 const initialActionState: ReservationActionState = { status: "idle" };
@@ -161,6 +163,10 @@ export function ReservationsLedger({
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [quickDraft, setQuickDraft] = useState<QuickDraft | null>(null);
+  const [, startTransition] = useTransition();
+  const closeQuickDraft = useCallback(() => {
+    setQuickDraft(null);
+  }, [setQuickDraft]);
   const dragStateRef = useRef<DragState | null>(null);
   const dragPointerRef = useRef<{ x: number; y: number } | null>(null);
   const scrollLoopRef = useRef<number | null>(null);
@@ -188,6 +194,16 @@ export function ReservationsLedger({
       }
     },
     [router]
+  );
+
+  const handleQuickResult = useCallback(
+    (state: ReservationActionState) => {
+      handleResult(
+        state,
+        state.status === "ok" ? "Reserva criada" : "Falha ao criar reserva"
+      );
+    },
+    [handleResult]
   );
 
   const { startDate, endDate } = useMemo(() => {
@@ -344,9 +360,11 @@ export function ReservationsLedger({
         formData.set("roomId", roomId);
       }
       setSavingId(reservationId);
-      updateFormAction(formData);
+      startTransition(() => {
+        updateFormAction(formData);
+      });
     },
-    [updateFormAction]
+    [startTransition, updateFormAction]
   );
 
   const submitSwap = useCallback(
@@ -362,9 +380,11 @@ export function ReservationsLedger({
       formData.set("checkIn", formatInputDate(checkIn));
       formData.set("checkOut", formatInputDate(checkOut));
       setSavingId(reservationId);
-      swapFormAction(formData);
+      startTransition(() => {
+        swapFormAction(formData);
+      });
     },
-    [swapFormAction]
+    [startTransition, swapFormAction]
   );
 
   const updatePreviewFromPointer = useCallback(
@@ -707,6 +727,8 @@ export function ReservationsLedger({
             <p className="text-sm text-muted">Nenhum quarto cadastrado.</p>
           ) : (
             sortedRooms.map((room) => {
+              const isUnavailable =
+                room.status === "MAINTENANCE" || room.status === "OUT_OF_SERVICE";
               const roomReservations = reservationsByRoom[room.id] ?? [];
               const draggingReservation = dragState
                 ? reservationById.get(dragState.id) ?? null
@@ -759,16 +781,29 @@ export function ReservationsLedger({
                     </span>
                   ) : null}
                   <div className="flex flex-col justify-center gap-1 px-3 py-3">
-                    <p className="font-display text-base text-foreground">
+                    <p
+                      className={`font-display text-base ${
+                        isUnavailable ? "text-rose-400" : "text-foreground"
+                      }`}
+                    >
                       Quarto {room.number}
                     </p>
-                    <p className="text-xs text-muted">{room.name ?? "Sem nome"}</p>
+                    <p
+                      className={`text-xs ${
+                        isUnavailable ? "text-rose-300/80" : "text-muted"
+                      }`}
+                    >
+                      {room.name ?? "Sem nome"}
+                    </p>
                   </div>
                   <div
                     className="relative min-h-[56px]"
                     ref={setRowRef(room.id)}
                     onPointerDown={(event) => startSelection(event, room.id)}
                   >
+                    {isUnavailable ? (
+                      <div className="pointer-events-none absolute inset-0 rounded-r-2xl bg-rose-500/10 backdrop-blur-sm shadow-[inset_0_0_0_1px_rgba(244,63,94,0.18)]" />
+                    ) : null}
                     <div
                       className="absolute inset-0 grid"
                       style={{ gridTemplateColumns: dayColumns }}
@@ -883,13 +918,15 @@ export function ReservationsLedger({
                                 : "Ajuste o periodo para editar esta reserva."
                             }
                           >
-                            <span className="truncate pr-3">
+                            <span className="min-w-0 flex-1 truncate pr-2">
                               {reservation.guestName}
                             </span>
                             <span className="ml-auto">
-                              <Pill tone={statusTone(reservation.status)}>
-                                {label}
-                              </Pill>
+                              <StatusBadge
+                                status={reservation.status}
+                                label={label}
+                                noShowStatus={reservation.noShowStatus}
+                              />
                             </span>
                             {isEditable ? (
                               <>
@@ -933,19 +970,14 @@ export function ReservationsLedger({
         </div>
       </div>
 
-      {quickDraft ? (
-        <QuickReservationModal
-          draft={quickDraft}
-          room={rooms.find((room) => room.id === quickDraft.roomId) ?? null}
-          onClose={() => setQuickDraft(null)}
-          onResult={(state) =>
-            handleResult(
-              state,
-              state.status === "ok" ? "Reserva criada" : "Falha ao criar reserva"
-            )
-          }
-        />
-      ) : null}
+        {quickDraft ? (
+          <QuickReservationModal
+            draft={quickDraft}
+            room={rooms.find((room) => room.id === quickDraft.roomId) ?? null}
+            onClose={closeQuickDraft}
+            onResult={handleQuickResult}
+          />
+        ) : null}
 
       <ActionModal
         open={resultOpen && Boolean(result)}
@@ -956,6 +988,173 @@ export function ReservationsLedger({
         actionLabel="Ok, entendi"
       />
     </>
+  );
+}
+
+function StatusBadge({
+  status,
+  label,
+  noShowStatus,
+}: {
+  status: string;
+  label: string;
+  noShowStatus?: string | null;
+}) {
+  const variant = badgeVariant(status, noShowStatus);
+  const displayLabel =
+    variant === "confirmed"
+      ? "Confirmada"
+      : variant === "pending"
+      ? "Sem resposta"
+      : variant === "late"
+      ? "Atraso"
+      : label;
+  const toneClass =
+    variant === "confirmed"
+      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40"
+      : variant === "pending"
+      ? "bg-amber-500/15 text-amber-400 border-amber-500/40"
+      : variant === "late"
+      ? "bg-rose-500/15 text-rose-400 border-rose-500/40"
+      : "bg-surface-strong text-muted border-white/10";
+
+  return (
+    <span
+      className={`inline-flex h-5 w-5 items-center justify-center rounded-full border ${toneClass}`}
+      title={displayLabel}
+      aria-label={displayLabel}
+    >
+      <StatusIcon variant={variant} status={status} />
+    </span>
+  );
+}
+
+function StatusIcon({
+  variant,
+  status,
+}: {
+  variant: "confirmed" | "pending" | "late" | "neutral";
+  status: string;
+}) {
+  const className = "h-3.5 w-3.5";
+  if (variant === "confirmed") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M20 6L9 17l-5-5" />
+      </svg>
+    );
+  }
+  if (variant === "pending") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 3" />
+      </svg>
+    );
+  }
+  if (variant === "late") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+        <path d="M10.3 4.2L3.6 17.5c-.7 1.3.2 2.5 1.7 2.5h13.4c1.5 0 2.4-1.2 1.7-2.5L13.7 4.2c-.7-1.4-2.7-1.4-3.4 0z" />
+      </svg>
+    );
+  }
+  if (status === "CHECKED_OUT") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M5 12h10" />
+        <path d="M12 8l4 4-4 4" />
+      </svg>
+    );
+  }
+  if (status === "NO_SHOW") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M12 7v6" />
+        <path d="M12 17h.01" />
+      </svg>
+    );
+  }
+  if (status === "CANCELED") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M7 7l10 10" />
+        <path d="M17 7l-10 10" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="4" y="6" width="16" height="14" rx="2" />
+      <path d="M8 3v6" />
+      <path d="M16 3v6" />
+      <path d="M4 10h16" />
+    </svg>
   );
 }
 
@@ -998,7 +1197,7 @@ function QuickReservationModal({
           <div>
             <p className="font-display text-lg text-foreground">Nova reserva</p>
             <p className="text-xs text-muted">
-              {room ? `Quarto ${room.number}` : "Quarto selecionado"} ·{" "}
+              {room ? `Quarto ${room.number}` : "Quarto selecionado"} -{" "}
               {formatInputDate(draft.checkIn)} ate {formatInputDate(draft.checkOut)}
             </p>
           </div>
