@@ -418,7 +418,7 @@ export function ExpenseInvoicesManager({
             Nenhuma fatura encontrada. Conecte o email financeiro.
           </p>
         ) : (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-2 text-[13px]">
             {paginatedInvoices.map((invoice) => {
               const statusLabel = STATUS_LABELS[invoice.status] ?? invoice.status;
               const statusTone =
@@ -464,11 +464,11 @@ export function ExpenseInvoicesManager({
               return (
                 <div
                   key={invoice.id}
-                  className="flex flex-wrap items-center justify-between gap-4 card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3"
+                  className="flex flex-wrap items-center justify-between gap-4 card-lite rounded-2xl border border-border bg-surface-strong px-4 py-2.5"
                 >
                   <div className="min-w-[220px] flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-display text-base text-foreground">
+                      <p className="font-display text-sm text-foreground">
                         {providerLabel}
                       </p>
                       <Pill tone={statusTone}>{statusLabel}</Pill>
@@ -505,7 +505,7 @@ export function ExpenseInvoicesManager({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-display text-lg">
+                    <span className="font-display text-base">
                       {formatCurrency(invoice.amount)}
                     </span>
                     {invoice.status === "PENDING" ? (

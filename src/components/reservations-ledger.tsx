@@ -30,9 +30,33 @@ type RoomItem = {
 type ReservationItem = {
   id: string;
   roomId: string | null;
+  room: {
+    number: string;
+    name: string | null;
+    category: string;
+  } | null;
+  roomCategory: string;
   checkIn: string;
   checkOut: string;
   status: string;
+  paymentStatus: string;
+  source: string;
+  adults: number;
+  children: number;
+  totalAmount: string | null;
+  packageType: string | null;
+  seasonType: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  guest: {
+    firstName: string;
+    lastName: string;
+    email: string | null;
+    phone: string | null;
+    documentId: string | null;
+    nationality: string | null;
+  };
   guestName: string;
   noShowStatus?: string | null;
 };
@@ -92,6 +116,43 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELED: "Cancelada",
 };
 
+const PAYMENT_LABELS: Record<string, string> = {
+  PENDING: "Pendente",
+  PAID: "Pago",
+  PARTIAL: "Parcial",
+  REFUNDED: "Reembolsado",
+  FAILED: "Falhou",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  DIRECT: "Direto",
+  BOOKING: "Booking.com",
+  WHATSAPP: "WhatsApp",
+  WALK_IN: "Walk-in",
+  OTA: "OTA",
+};
+
+const ROOM_CATEGORY_LABELS: Record<string, string> = {
+  STANDARD: "Standard",
+  DELUXE: "Deluxe",
+  SUITE: "Suite",
+  FAMILY: "Familia",
+  VILLA: "Villa",
+  OTHER: "Outro",
+};
+
+const SEASON_LABELS: Record<string, string> = {
+  HIGH: "Alta",
+  LOW: "Baixa",
+};
+
+const NO_SHOW_LABELS: Record<string, string> = {
+  PENDING: "Sem resposta",
+  RESPONDED: "Respondido",
+  ESCALATED: "Atraso",
+  CLOSED: "Encerrado",
+};
+
 const normalizeDate = (date: Date) =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12);
 
@@ -115,6 +176,29 @@ const formatInputDate = (date: Date) =>
 
 const formatDayLabel = (date: Date) =>
   `${String(date.getDate()).padStart(2, "0")} ${MONTH_LABELS[date.getMonth()]}`;
+
+const formatDateLabel = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleDateString("pt-BR");
+};
+
+const formatDateTimeLabel = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleString("pt-BR");
+};
+
+const formatCurrencyValue = (value: string | null) => {
+  if (!value) return "--";
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return value;
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 2,
+  }).format(parsed);
+};
 
 const diffDays = (from: Date, to: Date) =>
   Math.round((normalizeDate(from).getTime() - normalizeDate(to).getTime()) / MS_PER_DAY);
@@ -163,12 +247,25 @@ export function ReservationsLedger({
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [quickDraft, setQuickDraft] = useState<QuickDraft | null>(null);
+  const [detailsReservation, setDetailsReservation] =
+    useState<ReservationItem | null>(null);
   const [, startTransition] = useTransition();
   const closeQuickDraft = useCallback(() => {
     setQuickDraft(null);
   }, [setQuickDraft]);
+  const closeDetails = useCallback(() => {
+    setDetailsReservation(null);
+  }, [setDetailsReservation]);
+  const openDetails = useCallback(
+    (reservation: ReservationItem) => {
+      setDetailsReservation(reservation);
+    },
+    [setDetailsReservation]
+  );
   const dragStateRef = useRef<DragState | null>(null);
   const dragPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressClickRef = useRef(false);
   const scrollLoopRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const scrollVelocityRef = useRef({ x: 0, y: 0 });
@@ -544,6 +641,8 @@ export function ReservationsLedger({
         previewEnd: baseEnd,
       });
       dragPointerRef.current = { x: event.clientX, y: event.clientY };
+      dragOriginRef.current = { x: event.clientX, y: event.clientY };
+      suppressClickRef.current = false;
       startAutoScroll();
       event.preventDefault();
     },
@@ -639,6 +738,14 @@ export function ReservationsLedger({
     const handleMove = (event: PointerEvent) => {
       if (!dragStateRef.current) return;
       dragPointerRef.current = { x: event.clientX, y: event.clientY };
+      const origin = dragOriginRef.current;
+      if (origin && !suppressClickRef.current) {
+        const dx = event.clientX - origin.x;
+        const dy = event.clientY - origin.y;
+        if (Math.hypot(dx, dy) > 4) {
+          suppressClickRef.current = true;
+        }
+      }
       updatePreviewFromPointer(event.clientX, event.clientY);
     };
 
@@ -652,6 +759,10 @@ export function ReservationsLedger({
         current.id
       );
       clearDragState();
+      dragOriginRef.current = null;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
       if (conflicts.length > 0) {
         if (current.mode === "move" && conflicts.length === 1) {
           const nextCheckIn = addDays(startDate, current.previewStart);
@@ -767,6 +878,9 @@ export function ReservationsLedger({
                   }`}
                   style={{ gridTemplateColumns: columns }}
                 >
+                  {isUnavailable ? (
+                    <div className="pointer-events-none absolute inset-0 rounded-2xl bg-rose-500/10 backdrop-blur-sm shadow-[inset_0_0_0_1px_rgba(244,63,94,0.18)]" />
+                  ) : null}
                   {isTargetRow ? (
                     <span
                       className={`pointer-events-none absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.2em] ${
@@ -780,7 +894,7 @@ export function ReservationsLedger({
                       {isSwapRow ? "Troca" : isConflictRow ? "Conflito" : "Destino"}
                     </span>
                   ) : null}
-                  <div className="flex flex-col justify-center gap-1 px-3 py-3">
+                  <div className="relative z-10 flex flex-col justify-center gap-1 px-3 py-3">
                     <p
                       className={`font-display text-base ${
                         isUnavailable ? "text-rose-400" : "text-foreground"
@@ -797,13 +911,10 @@ export function ReservationsLedger({
                     </p>
                   </div>
                   <div
-                    className="relative min-h-[56px]"
+                    className="relative z-10 min-h-[56px]"
                     ref={setRowRef(room.id)}
                     onPointerDown={(event) => startSelection(event, room.id)}
                   >
-                    {isUnavailable ? (
-                      <div className="pointer-events-none absolute inset-0 rounded-r-2xl bg-rose-500/10 backdrop-blur-sm shadow-[inset_0_0_0_1px_rgba(244,63,94,0.18)]" />
-                    ) : null}
                     <div
                       className="absolute inset-0 grid"
                       style={{ gridTemplateColumns: dayColumns }}
@@ -890,6 +1001,12 @@ export function ReservationsLedger({
                                   )
                                 : undefined
                             }
+                            onPointerUp={(event) => {
+                              if (suppressClickRef.current) return;
+                              const target = event.target as HTMLElement;
+                              if (target.closest("[data-resize-handle]")) return;
+                              openDetails(reservation);
+                            }}
                             className={`group relative mx-1 flex h-10 items-center rounded-2xl border border-border/60 bg-surface-strong/70 px-3 text-xs text-foreground shadow-tight transition-transform duration-200 ease-out ${
                               isEditable
                                 ? isDragging
@@ -941,6 +1058,7 @@ export function ReservationsLedger({
                                       baseEndIndex
                                     );
                                   }}
+                                  data-resize-handle
                                   className="absolute left-1 top-1/2 h-5 w-1 -translate-y-1/2 cursor-ew-resize rounded-full bg-foreground/60 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                                 />
                                 <span
@@ -954,6 +1072,7 @@ export function ReservationsLedger({
                                       baseEndIndex
                                     );
                                   }}
+                                  data-resize-handle
                                   className="absolute right-1 top-1/2 h-5 w-1 -translate-y-1/2 cursor-ew-resize rounded-full bg-foreground/60 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                                 />
                               </>
@@ -976,6 +1095,13 @@ export function ReservationsLedger({
             room={rooms.find((room) => room.id === quickDraft.roomId) ?? null}
             onClose={closeQuickDraft}
             onResult={handleQuickResult}
+          />
+        ) : null}
+
+        {detailsReservation ? (
+          <ReservationDetailsModal
+            reservation={detailsReservation}
+            onClose={closeDetails}
           />
         ) : null}
 
@@ -1155,6 +1281,177 @@ function StatusIcon({
       <path d="M16 3v6" />
       <path d="M4 10h16" />
     </svg>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 text-sm">
+      <span className="text-muted">{label}</span>
+      <span className="text-right text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function ReservationDetailsModal({
+  reservation,
+  onClose,
+}: {
+  reservation: ReservationItem;
+  onClose: () => void;
+}) {
+  const statusLabel = STATUS_LABELS[reservation.status] ?? reservation.status;
+  const paymentLabel =
+    PAYMENT_LABELS[reservation.paymentStatus] ?? reservation.paymentStatus;
+  const sourceLabel = SOURCE_LABELS[reservation.source] ?? reservation.source;
+  const roomCategoryLabel =
+    ROOM_CATEGORY_LABELS[reservation.roomCategory] ?? reservation.roomCategory;
+  const seasonLabel = reservation.seasonType
+    ? SEASON_LABELS[reservation.seasonType] ?? reservation.seasonType
+    : "Automatica";
+  const noShowLabel = reservation.noShowStatus
+    ? NO_SHOW_LABELS[reservation.noShowStatus] ?? reservation.noShowStatus
+    : null;
+  const guestName = `${reservation.guest.firstName} ${reservation.guest.lastName}`;
+  const roomLabel = reservation.room?.number
+    ? `Quarto ${reservation.room.number}`
+    : "Quarto a definir";
+  const guestsLabel = `${reservation.adults} adultos • ${reservation.children} criancas`;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-8 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="panel-strong w-full max-w-4xl rounded-3xl border border-border bg-surface-strong p-6"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-display text-lg text-foreground">{guestName}</p>
+            <p className="text-xs text-muted">
+              {roomLabel} • {formatDateLabel(reservation.checkIn)} ate{" "}
+              {formatDateLabel(reservation.checkOut)}
+            </p>
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
+            Fechar
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-border/70 bg-surface/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted">Reserva</p>
+            <div className="mt-3 space-y-2">
+              <DetailRow
+                label="Status"
+                value={
+                  <span className="inline-flex items-center gap-2">
+                    <StatusBadge
+                      status={reservation.status}
+                      label={statusLabel}
+                      noShowStatus={reservation.noShowStatus}
+                    />
+                    {statusLabel}
+                  </span>
+                }
+              />
+              {noShowLabel ? (
+                <DetailRow label="No-show" value={noShowLabel} />
+              ) : null}
+              <DetailRow
+                label="Check-in"
+                value={formatDateLabel(reservation.checkIn)}
+              />
+              <DetailRow
+                label="Check-out"
+                value={formatDateLabel(reservation.checkOut)}
+              />
+              <DetailRow label="Hospedes" value={guestsLabel} />
+              <DetailRow label="Quarto" value={roomLabel} />
+              <DetailRow
+                label="Nome do quarto"
+                value={reservation.room?.name ?? "--"}
+              />
+              <DetailRow label="Categoria" value={roomCategoryLabel} />
+              <DetailRow label="Temporada" value={seasonLabel} />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border/70 bg-surface/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted">Cliente</p>
+            <div className="mt-3 space-y-2">
+              <DetailRow label="Nome" value={guestName} />
+              <DetailRow label="Email" value={reservation.guest.email ?? "--"} />
+              <DetailRow
+                label="Telefone"
+                value={reservation.guest.phone ?? "--"}
+              />
+              <DetailRow
+                label="Documento"
+                value={reservation.guest.documentId ?? "--"}
+              />
+              <DetailRow
+                label="Nacionalidade"
+                value={reservation.guest.nationality ?? "--"}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border/70 bg-surface/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted">
+              Financeiro
+            </p>
+            <div className="mt-3 space-y-2">
+              <DetailRow label="Pagamento" value={paymentLabel} />
+              <DetailRow
+                label="Total"
+                value={formatCurrencyValue(reservation.totalAmount)}
+              />
+              <DetailRow label="Fonte" value={sourceLabel} />
+              <DetailRow
+                label="Pacote"
+                value={reservation.packageType ?? "--"}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-border/70 bg-surface/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted">
+              Observacoes
+            </p>
+            <p className="mt-3 text-sm text-muted">
+              {reservation.notes?.trim() ? reservation.notes : "Sem observacoes."}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-border/70 bg-surface/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted">Registro</p>
+            <div className="mt-3 space-y-2">
+              <DetailRow
+                label="Criada em"
+                value={formatDateTimeLabel(reservation.createdAt)}
+              />
+              <DetailRow
+                label="Atualizada em"
+                value={formatDateTimeLabel(reservation.updatedAt)}
+              />
+              <DetailRow label="ID" value={reservation.id} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

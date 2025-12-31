@@ -1,0 +1,1 @@
+quero que o clima seja mostrado em tempo real na cidade que o usuário escolher, e que também apareça o estado climático no flagship

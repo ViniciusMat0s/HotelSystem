@@ -240,7 +240,7 @@ export function RoomsManager({ rooms }: { rooms: RoomItem[] }) {
         {sortedRooms.length === 0 ? (
           <p className="text-sm text-muted">Nenhum quarto encontrado.</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
             {paginatedRooms.map((room) => {
               const statusLabel = STATUS_LABELS[room.status] ?? room.status;
               const statusTone =
@@ -252,22 +252,22 @@ export function RoomsManager({ rooms }: { rooms: RoomItem[] }) {
               return (
                 <div
                   key={room.id}
-                  className="card-lite rounded-2xl border border-border bg-surface-strong p-4 text-sm"
+                  className="card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3 text-[13px]"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-display text-lg">Quarto {room.number}</p>
+                    <p className="font-display text-base">Quarto {room.number}</p>
                     <Pill tone={statusTone}>{statusLabel}</Pill>
                   </div>
-                  <p className="mt-2 text-xs text-muted">
+                  <p className="mt-1.5 text-xs text-muted">
                     {CATEGORY_LABELS[room.category] ?? room.category}
                   </p>
-                  <div className="mt-3 grid gap-2 text-xs text-muted sm:grid-cols-2">
+                  <div className="mt-2 grid gap-2 text-xs text-muted sm:grid-cols-2">
                     <span>Andar: {room.floor ?? "--"}</span>
                     <span>Max: {room.maxGuests}</span>
                     <span>Diaria: {formatCurrency(room.baseRate)}</span>
                     <span>Nome: {room.name ?? "--"}</span>
                   </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setEditing(room)}

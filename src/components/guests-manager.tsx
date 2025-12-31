@@ -170,7 +170,7 @@ export function GuestsManager({ guests }: { guests: GuestItem[] }) {
         {filteredGuests.length === 0 ? (
           <p className="text-sm text-muted">Nenhum hospede encontrado.</p>
         ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="space-y-2">
             {paginatedGuests.map((guest) => {
               const scoreTone =
                 guest.difficultyScore >= 7
@@ -181,11 +181,11 @@ export function GuestsManager({ guests }: { guests: GuestItem[] }) {
               return (
                 <div
                   key={guest.id}
-                  className="card-lite rounded-2xl border border-border bg-surface-strong p-4 text-sm"
+                  className="card-lite rounded-2xl border border-border bg-surface-strong px-4 py-3 text-[13px]"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="font-display text-base text-foreground">
+                      <p className="font-display text-sm text-foreground">
                         {guest.firstName} {guest.lastName}
                       </p>
                       <p className="text-xs text-muted">
@@ -202,7 +202,7 @@ export function GuestsManager({ guests }: { guests: GuestItem[] }) {
                       <Pill tone={scoreTone}>Score {guest.difficultyScore}</Pill>
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
                     <span>
                       Documento: {guest.documentId ?? "--"} - {guest.nationality ?? "--"}
                     </span>

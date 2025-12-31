@@ -75,7 +75,7 @@ export default async function RoomsPage() {
               Cadastre os quartos para acompanhar ocupacao e manutencao.
             </p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-3">
               {roomCards.map((room) => (
                 <div
                   key={room.id}
