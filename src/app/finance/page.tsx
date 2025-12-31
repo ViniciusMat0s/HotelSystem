@@ -1,4 +1,5 @@
 import { Panel } from "@/components/cards";
+import { DueInvoicesPanel } from "@/components/due-invoices-panel";
 import { ExpenseInvoicesManager } from "@/components/expense-invoices-manager";
 import { FinancialEntriesManager } from "@/components/financial-entries-manager";
 import { ExpenseIngestForm } from "@/components/expense-ingest-form";
@@ -93,6 +94,34 @@ export default async function FinancePage() {
     active: item.active,
   }));
 
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const windowEnd = new Date(todayStart);
+  windowEnd.setDate(windowEnd.getDate() + 30);
+  windowEnd.setHours(23, 59, 59, 999);
+
+  const dueInvoices = await prisma.expenseInvoice.findMany({
+    where: {
+      hotelId: hotel.id,
+      status: { notIn: ["PAID", "CANCELED"] },
+      dueDate: {
+        lte: windowEnd,
+      },
+    },
+    orderBy: { dueDate: "asc" },
+  });
+
+  const dueInvoiceItems = dueInvoices.map((invoice) => ({
+    id: invoice.id,
+    provider: invoice.provider,
+    invoiceNumber: invoice.invoiceNumber ?? null,
+    amount: Number(invoice.amount),
+    currency: invoice.currency,
+    dueDate: invoice.dueDate ? invoice.dueDate.toISOString() : "",
+    status: invoice.status,
+    notes: invoice.notes ?? null,
+  }));
+
   const invoices = await prisma.expenseInvoice.findMany({
     where: { hotelId: hotel.id },
     orderBy: { receivedAt: "desc" },
@@ -176,6 +205,8 @@ export default async function FinancePage() {
       >
         <RecurringExpensesManager items={recurringItems} />
       </Panel>
+
+      <DueInvoicesPanel items={dueInvoiceItems} />
 
       <section className="grid gap-6 lg:grid-cols-2">
         <Panel
